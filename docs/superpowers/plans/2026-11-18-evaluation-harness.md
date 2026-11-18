@@ -81,15 +81,19 @@
 - `read_business_state(store: Store) -> dict` returns the complete semantic business state, including all inventory movements; excludes only generated IDs/timestamps and agent-run telemetry from comparisons.
 - `normalize_state(state: dict) -> dict` sorts collections and normalizes generated IDs for comparison while preserving quantities, dates, nutrient snapshots and operation multiplicity.
 
-- [ ] Write `test_fixture_round_trips_all_business_tables`; seed a synthetic profile, inventory item, two batches, addon plan, event and workflow state, then assert the normalized snapshot matches.
-- [ ] Write `test_extra_event_or_movement_changes_snapshot`; assert one additional meal event or inventory movement produces a state difference.
-- [ ] Write `test_episode_schema_is_removed_after_success_and_exception`; assert the schema is absent after both context exits.
-- [ ] Write `test_fixture_loader_rejects_personal_database_and_nonempty_schema`; assert production host/db and an already seeded schema are refused before task execution.
-- [ ] Ensure `docker compose --profile test up -d --wait db_test` has completed before running the database-backed fixture tests.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_fixtures.py -q`; confirm failures before implementation.
-- [ ] Implement the schema context manager and transactionally seed/read/normalize fixture state using `Store.transaction()` and parameterized SQL.
-- [ ] Rerun `tests/test_eval_fixtures.py -q`; confirm state preservation, exception cleanup and DB safety guard pass.
-- [ ] Commit `feat: isolate evaluation fixture state`.
+- [x] Write `test_fixture_round_trips_all_business_tables`; seed a synthetic profile, inventory item, two batches, addon plan, event and workflow state, then assert the normalized snapshot matches.
+- [x] Write `test_extra_event_or_movement_changes_snapshot`; assert one additional meal event or inventory movement produces a state difference.
+- [x] Write `test_normalization_replaces_generated_ids_and_preserves_duplicate_rows`; assert generated-ID changes do not change comparisons while duplicate operations and movements remain visible.
+- [x] Write `test_normalization_preserves_operation_inputs_and_nonworkflow_history`; assert operation input hashes and business `history` fields matter, while workflow transcript history is compared from the conversation trace.
+- [x] Write `test_episode_schema_is_removed_after_success_and_exception`; assert the schema is absent after both context exits.
+- [x] Write `test_fixture_loader_rejects_personal_database_and_nonempty_schema`; assert production host/db and an already seeded schema are refused before task execution.
+- [x] Write `test_fixture_loader_rejects_invalid_references_and_rolls_back`; assert malformed foreign keys leave the isolated schema empty for a subsequent seed.
+- [x] Ensure `docker compose --profile test up -d --wait db_test` has completed before running the database-backed fixture tests.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_fixtures.py -q`; confirm failures before implementation.
+- [x] Implement the schema context manager and transactionally seed/read/normalize fixture state using `Store.transaction()` and parameterized SQL.
+- [x] Rerun `tests/test_eval_fixtures.py -q`; confirm all seven fixture tests pass.
+- [x] Run the full test suite; confirm all 119 tests pass.
+- [x] Commit `feat: isolate evaluation fixture state`.
 
 ## Task 3: Controller Interface and Fixed-Workflow Baseline
 
@@ -101,10 +105,10 @@
 - `AgentController(agent: DemoAgent, workflow: Workflow)` delegates message handling to `DemoAgent.handle()` and binds approvals to the current workflow preview via `/confirm <id>` or `/reject <id>`.
 - `FixedWorkflowBaseline(service: NutritionService, workflow: Workflow, client, settings)` uses one constrained structured-action extraction per user message; the structured result contains an action, arguments and user-facing reply, while Python applies a fixed routing table and calls the same service operations. Clarification is a structured action and subsequent answers re-enter the same fixed route. It does not expose a model-selected tool loop or select a new operation after observing tool results. It uses the same model identity/settings, context, resource limits, fixtures and approvals as Agent.
 
-`agent_factory(store, config) -> Controller` and `baseline_factory(store, config) -> Controller` construct each controller against the current episode's service and workflow. Factories receive no `EvalTask`; the runner alone holds scripted answers, approvals and grading fields.
+`agent_factory(store, catalog: Catalog, config) -> Controller` and `baseline_factory(store, catalog: Catalog, config) -> Controller` construct each controller against the current episode's service and workflow. The runner builds `Catalog` from the task fixture and passes that safe dependency; factories receive no `EvalTask`, so scripted answers and grading fields remain runner-only.
 
 - [ ] Write `test_agent_adapter_passes_message_and_preview_id_to_application_confirmation`; use a fake DemoAgent/workflow and assert the exact current preview ID is used.
-- [ ] Write `test_controller_factory_receives_no_task_or_rubric`; assert controller factories accept only the current Store and EvalConfig, so answer keys and scripted future answers remain runner-only.
+- [ ] Write `test_controller_factory_receives_catalog_but_no_task_or_rubric`; assert controller factories accept Store, Catalog and EvalConfig, but not EvalTask, so answer keys and scripted future answers remain runner-only.
 - [ ] Write `test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response`; fake the model response and assert the baseline follows the fixed Python route without a second model-driven operation choice.
 - [ ] Write `test_baseline_uses_same_service_for_inventory_meal_and_correction`; inject a spy service and assert only the shared public service methods perform writes.
 - [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_controllers.py -q`; confirm failure before implementation.

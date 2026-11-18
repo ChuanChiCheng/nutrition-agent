@@ -78,3 +78,9 @@ def test_suggestion_does_not_claim_pass_on_single_metric():
     r=Catalog.load().suggest_additions(Nutrients(600,39,65,20),Nutrients(600,40,65,20))
     assert r
     assert all('targets' in x and 'meal_nutrients' in x for x in r)
+
+
+def test_exact_division_without_rounded_reciprocal():
+    from nutrition_demo.nutrition import per_box,scale_nutrients
+    assert per_box(Nutrients(1980,0,0,0),6).kcal==D(330)
+    assert scale_nutrients(Nutrients(700,0,0,0),D(600),D(700)).kcal==D(600)

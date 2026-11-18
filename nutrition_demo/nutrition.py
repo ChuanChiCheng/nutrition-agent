@@ -4,13 +4,14 @@ from .models import Nutrients, ZERO, decimal
 
 
 def scale_nutrients(value, used, reference):
-    return value.scale(decimal(used) / decimal(reference, positive=True))
+    used, reference = decimal(used), decimal(reference, positive=True)
+    return Nutrients(**{k: getattr(value,k) * used / reference for k in value.__dataclass_fields__})
 
 
 def per_box(total, boxes):
     if type(boxes) is not int or boxes <= 0:
         raise ValueError('Boxes must be a positive integer')
-    return total.scale(Decimal(1) / boxes)
+    return Nutrients(**{k: getattr(total,k) / boxes for k in total.__dataclass_fields__})
 
 
 def used_cost(price, used, package_quantity):

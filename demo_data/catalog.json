@@ -681,7 +681,12 @@
       ],
       "source_recipe_id": "curry",
       "data_status": "source_recipe_requires_actual_quantities",
-      "default_requested_boxes": 6
+      "default_requested_boxes": 6,
+      "unquantified_ingredient_ids": [
+        "garlic",
+        "oil",
+        "water"
+      ]
     },
     {
       "id": "nikujaga",
@@ -799,7 +804,12 @@
       ],
       "source_recipe_id": "nikujaga",
       "data_status": "source_recipe_requires_actual_quantities",
-      "default_requested_boxes": 6
+      "default_requested_boxes": 6,
+      "unquantified_ingredient_ids": [
+        "oil",
+        "salt",
+        "water"
+      ]
     },
     {
       "id": "bbq",
@@ -910,7 +920,11 @@
       ],
       "source_recipe_id": "bbq",
       "data_status": "source_recipe_requires_actual_quantities",
-      "default_requested_boxes": 6
+      "default_requested_boxes": 6,
+      "unquantified_ingredient_ids": [
+        "water",
+        "broth"
+      ]
     },
     {
       "id": "rice_pot",
@@ -1017,7 +1031,13 @@
       "allowed_substitutions": [],
       "source_recipe_id": "rice_pot",
       "data_status": "source_recipe_requires_actual_quantities",
-      "default_requested_boxes": 6
+      "default_requested_boxes": 6,
+      "unquantified_ingredient_ids": [
+        "canned_chicken",
+        "garlic",
+        "oil",
+        "pepper"
+      ]
     }
   ]
 }

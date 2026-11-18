@@ -117,3 +117,21 @@ def test_customized_steps_use_confirmed_quantities():
     assert '600' in text and '92' in text
     assert '1097' not in text and '1097' not in text.replace(',','')
     assert '花椰菜' not in text
+
+
+def test_source_unquantified_ingredients_become_valid_after_quantity_and_label_supplied():
+    from nutrition_demo.catalog import Catalog
+    c=Catalog.load()
+    # Supply controlled test labels for every currently missing brand; no assumptions about actual foods.
+    for ref in c.ingredients.values():
+        if ref.get('nutrients') is None:
+            ref['nutrients']={'kcal':'1','protein_g':'1','carbs_g':'1','fat_g':'1'}
+            ref['source']={'status':'synthetic'}
+    rice=[*c.recipe('rice_pot')['ingredients'],
+          {'ingredient_id':'canned_chicken','quantity':800,'unit':'g','state':'drained'},
+          {'ingredient_id':'garlic','quantity':18,'unit':'g','state':'raw'},
+          {'ingredient_id':'oil','quantity':10,'unit':'g','state':'packaged'}]
+    assert c.validate_proposal('rice_pot',rice)
+    curry=[*c.recipe('curry')['ingredients'],{'ingredient_id':'garlic','quantity':12,'unit':'g','state':'raw'},
+           {'ingredient_id':'oil','quantity':10,'unit':'g','state':'packaged'}]
+    assert c.validate_proposal('curry',curry)

@@ -59,8 +59,8 @@ class Catalog:
         # Essential ingredients cannot be removed. Optional substitutions are explicit, not implicit.
         if not set(recipe['essential_ingredients']) <= ids:
             raise ValueError('Dish identity: essential ingredients missing')
-        allowed=set(i['ingredient_id'] for i in recipe['ingredients']) | set(recipe.get('allowed_substitutions',[]))
-        original=set(i['ingredient_id'] for i in recipe['ingredients'])
+        original=set(i['ingredient_id'] for i in recipe['ingredients']) | set(recipe.get('unquantified_ingredient_ids',[]))
+        allowed=original | set(recipe.get('allowed_substitutions',[]))
         if len(ids-original)>1 or not ids <= allowed:
             raise ValueError('Unapproved substitution; preserve dish identity')
         for i in items:
@@ -140,4 +140,30 @@ class Catalog:
             if 'broccoli' in by_id:result.append('另加熱花椰菜 '+amount('broccoli')+'。')
         else:result+=recipe['steps']
         result.append('本次預計 '+str(boxes)+' 盒；做完後確認實際用量、盒數與各批組成。來源時間僅作參考，熟度依來源與實際測量。')
+        return result
+
+    def evidence(self,recipe_id,steps=None):
+        """Small stable citations: the model selects existing text, never authors the evidence."""
+        import re
+        recipe=self.recipe(recipe_id)
+        result=[{'id':'step:'+str(i+1),'page':None,'text':text,'kind':'confirmed_or_source_step'}
+                for i,text in enumerate(steps if steps is not None else recipe['steps'])]
+        if not any(r['recipe_id']==recipe_id for r in self.manifest.get('recipes',[])):return result
+        path=DATA_DIR/'sources'/(recipe_id+'.txt')
+        if not path.exists():return result
+        text=path.read_text()
+        pages=re.split(r'PAGE\s+(\d+)[^\n]*\n',text)
+        for index in range(1,len(pages),2):
+            page=int(pages[index]);body=pages[index+1]
+            chunks=[];current=''
+            for line in body.splitlines():
+                if len(current)+len(line)>400 and current:
+                    chunks.append(current.strip());current=''
+                current+=line+'\n'
+            if current.strip():chunks.append(current.strip())
+            for i,chunk in enumerate(chunks):
+                result.append({'id':f'source:{page}:{i+1}','page':page,'text':chunk,'kind':'historical_source'})
+            if recipe_id=='curry' and page==2:
+                summary=body.split('1 切好食材')[0].strip()
+                result.append({'id':'source:2:summary','page':2,'text':summary,'kind':'historical_source'})
         return result

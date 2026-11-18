@@ -184,7 +184,9 @@ class NutritionService:
             payload={'recipe_id':recipe_id,'actual_usage':actual,'outputs':outputs,
                      'prepared_on':self._day(prepared_on),'dispositions':dispositions}
             changes=[{'ingredient_id':i['ingredient_id'],'consume':i['quantity'],'unit':i['unit']} for i in actual]
-            changes+=[{'batch':b['name'],'boxes':b['boxes'],'allocations':b['allocations']} for b in outputs]
+            changes+=[{'disposition':d} for d in dispositions]
+            changes+=[{'batch':b['name'],'boxes':b['boxes'],'allocations':b['allocations'],
+                       **self._output_snapshot(c,recipe_id,actual,b)} for b in outputs]
             return self._preview(c,'preparation',payload,changes,'一次扣除本次總用量；各批營養與成本只計獲分配食材。')
 
     def _batch(self,c,batch_id):
@@ -238,18 +240,8 @@ class NutritionService:
                       (ingredient,run,i['ingredient_id'],decimal(i['quantity']),i['unit'],jsonb(i)))
             self._move(c,i,-decimal(i['quantity']),'preparation',run=run)
         for output in payload['outputs']:
-            id=uid();batch_ids.append(id);total=ZERO;costs=[];sources=[]
-            for a in output['allocations']:
-                _,i=mapping[a['cooking_ingredient_id']]
-                ratio=decimal(a['quantity'])/decimal(i['quantity'],positive=True)
-                total+=scale_nutrients(n(i['nutrients']),decimal(a['quantity']),decimal(i['quantity']))
-                costs.append(decimal(i['cost'])*decimal(a['quantity'])/decimal(i['quantity']) if i['cost'] is not None else None)
-                sources.append(i['source'])
-            cost=aggregate_cost(costs)
-            data={'box_nutrients':per_box(total,output['boxes']),'total_nutrients':total,
-                  'box_cost':{**cost,'known_subtotal':cost['known_subtotal']/output['boxes'],
-                              'total':cost['total']/output['boxes'] if cost['complete'] else None},
-                  'total_cost':cost,'sources':sources,'recipe_id':payload['recipe_id']}
+            id=uid();batch_ids.append(id)
+            data=self._output_snapshot(c,payload['recipe_id'],payload['actual_usage'],output)
             c.execute('INSERT INTO batches VALUES(%s,%s,%s,%s,%s,%s)',
                       (id,run,output['name'],output['boxes'],output['boxes'],jsonb(data)))
             for a in output['allocations']:
@@ -323,7 +315,7 @@ class NutritionService:
                                 'addon_version':addons['version'],'meal_nutrients':asdict(box+addon_total),
                                 'box_cost':{**cost,'known_subtotal':decimal(cost['known_subtotal']),
                                             'total':decimal(cost['total']) if cost['total'] is not None else None},
-                                'sources':b['data']['sources']})
+                                'sources':b['data']['sources'],'targets':b['data'].get('targets')})
             return {'batches':batches}
 
     def _meal_payload(self,c,batch_id,eaten_on,meal=None,addon_override=None,*,check_stock=True):
@@ -434,6 +426,9 @@ class NutritionService:
             if 'meal' in changes:new['meal']=changes['meal']
             changing_batch='batch_id' in changes and changes['batch_id']!=old['batch_id']
             if changing_batch:
+                target_plan=self._addons(c,changes['batch_id'])
+                if 'addon_override' not in changes and (old['addon_items'] or target_plan['version']):
+                    raise ValueError('needs_clarification: specify actual historical addons; null explicitly chooses the current target plan')
                 b=self._batch(c,changes['batch_id'])
                 if b['remaining_boxes']<=0:raise ValueError('No boxes remaining in target batch')
                 new.update({'batch_id':b['id'],'batch_name':b['name'],
@@ -444,7 +439,7 @@ class NutritionService:
                 if changes['addon_override'] is None:
                     plan=self._addons(c,new['batch_id'])
                     new.update({'addon_items':plan['data']['items'],'addon_version':plan['version']})
-                else:new['addon_items']=self._items(changes['addon_override'],c=c)
+                else:new['addon_items']=self._historical_addons(c,old['addon_items'],changes['addon_override'])
             new['addon_nutrients']=encode(sum((n(i['nutrients']) for i in new['addon_items']),ZERO))
             new['total_nutrients']=encode(n(new['box_nutrients'])+n(new['addon_nutrients']))
             if new==old:raise ValueError('No changes to event')
@@ -511,3 +506,40 @@ class NutritionService:
                   "ON CONFLICT(ingredient_id) DO UPDATE SET data=jsonb_set(inventory.data,'{product_label}',excluded.data->'product_label')",
                   (ref['id'],ref['unit'],ref['state'],jsonb({'product_label':payload['label']})))
         return {'ingredient_id':ref['id'],'label_updated':True}
+
+
+    def _historical_addons(self,c,original,override):
+        known={i['ingredient_id']:i for i in original}
+        result=[]
+        if len({i['ingredient_id'] for i in override})!=len(override):raise ValueError('Duplicate addon')
+        for item in override:
+            prior=known.get(item['ingredient_id'])
+            quantity=decimal(item['quantity'])
+            if prior and decimal(prior['quantity'])>0:
+                if item['unit']!=prior['unit'] or item['state']!=prior['state']:
+                    raise ValueError('Historical addon unit/state mismatch')
+                basis=decimal(prior['quantity'])
+                result.append(encode({**prior,'quantity':quantity,
+                    'nutrients':scale_nutrients(n(prior['nutrients']),quantity,basis),
+                    'cost':decimal(prior['cost'])*quantity/basis if prior['cost'] is not None else None}))
+            else:result+=self._items([item],c=c)
+        return result
+
+
+    def _output_snapshot(self,c,recipe_id,actual,output):
+        usage={i['ingredient_id']:i for i in actual}
+        total=ZERO;costs=[];sources=[]
+        for a in output['allocations']:
+            i=usage[a['cooking_ingredient_id']]
+            quantity,basis=decimal(a['quantity']),decimal(i['quantity'],positive=True)
+            total+=scale_nutrients(n(i['nutrients']),quantity,basis)
+            costs.append(decimal(i['cost'])*quantity/basis if i['cost'] is not None else None)
+            sources.append(i['source'])
+        cost=aggregate_cost(costs);box=per_box(total,output['boxes'])
+        profile=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+        targets=profile['data'].get('meal_targets') if profile else None
+        return {'box_nutrients':box,'total_nutrients':total,
+                'box_cost':{**cost,'known_subtotal':cost['known_subtotal']/output['boxes'],
+                            'total':cost['total']/output['boxes'] if cost['complete'] else None},
+                'total_cost':cost,'sources':sources,'recipe_id':recipe_id,
+                'targets':validate_targets(box,n(targets)) if targets else None}

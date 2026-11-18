@@ -42,7 +42,8 @@ def run_scripted(store):
         return result.data
     def call(name,args):
         responses.next_call=(name,args)
-        r=checked(agent.handle('合成情境：'+name))
+        message='我已吃了批次 '+args['batch_id']+' 一盒' if name=='log_meal' else '合成情境：'+name
+        r=checked(agent.handle(message))
         if not r['tool_results'] or not r['tool_results'][0]['result']['ok']:
             raise ValueError('Scripted tool step failed')
         return r

@@ -49,7 +49,7 @@ def test_change_batch_restores_source_and_uses_target_addon(prepared):
     p=s.preview_preparation('curry',[{'ingredient_id':'chicken','quantity':100,'unit':'g','state':'raw'}],
         [B('new',1,[A('chicken',100,'g')])],'today')
     b2=s.confirm_preview(p.data['id'],'prepare2').data['batch_ids'][0]
-    p=s.preview_correction(e,{'batch_id':b2})
+    p=s.preview_correction(e,{'batch_id':b2,'addon_override':[]})
     assert p.ok,p
     assert s.confirm_preview(p.data['id'],'swap').ok
     by={x['id']:x for x in s.batch_summary().data['batches']}
@@ -108,3 +108,31 @@ def test_correction_rejects_unknown_addon_and_insufficient_stock(prepared):
     assert not s.preview_correction(e,{'addon_override':[{'ingredient_id':'missing','quantity':1,'unit':'g','state':'raw'}]}).ok
     assert not s.preview_correction(e,{'addon_override':[{'ingredient_id':'yogurt','quantity':11,'unit':'serving','state':'packaged'}]}).ok
     assert quantities(s)['yogurt']==10
+
+
+def test_historical_addon_quantity_correction_keeps_original_nutrition_label(prepared):
+    s,b=prepared;add_yogurt(s,b);e=event(s,b)
+    label={'reference_quantity':1,'nutrients':{'kcal':140,'protein_g':20,'carbs_g':10,'fat_g':2},
+           'source_note':'new product label','source_url':None,'price':None}
+    p=s.preview_product_label('yogurt',label)
+    assert s.confirm_preview(p.data['id'],'new-label').ok
+    # The correction describes two servings of the original consumed product, not today's label.
+    p=s.preview_correction(e,{'addon_override':[{'ingredient_id':'yogurt','quantity':2,'unit':'serving','state':'packaged'}]})
+    assert p.ok,p
+    assert s.confirm_preview(p.data['id'],'historic-quantity').ok
+    assert s.daily_summary('today').data['addons']['kcal']==200
+    assert quantities(s)['yogurt']==8
+
+
+def test_changed_destination_addon_history_requires_explicit_actual_addons(prepared):
+    s,b=prepared;e=event(s,b)
+    p=s.preview_preparation('curry',[{'ingredient_id':'chicken','quantity':100,'unit':'g','state':'raw'}],
+        [B('destination',1,[A('chicken',100,'g')])],'today')
+    b2=s.confirm_preview(p.data['id'],'destination').data['batch_ids'][0]
+    add_yogurt(s,b2,1);add_yogurt(s,b2,2)
+    p=s.preview_correction(e,{'batch_id':b2})
+    assert not p.ok and 'clarification' in p.error
+    p=s.preview_correction(e,{'batch_id':b2,'addon_override':[]})
+    assert p.ok,p
+    assert s.confirm_preview(p.data['id'],'explicit-none').ok
+    assert s.daily_summary('today').data['addons']['kcal']==0

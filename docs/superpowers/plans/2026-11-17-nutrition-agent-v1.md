@@ -171,11 +171,11 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — app ENTRYPOINT 及 DATABASE_URL／TEST_DATABASE_URL；db 健康後可接受連線。此任務完成時先用 --entrypoint 覆寫檢查環境。
 
-- [ ] 檢查 Git 狀態、repository instructions、docker version、docker compose version 與 Docker engine。若 CLI 或 engine 缺失，診斷實際安裝狀況後處理可恢復設定；需要使用者安裝／啟動時給出明確步驟。
-- [ ] 建立鎖定依賴與容器定義。首次以可用 uv 產生 lockfile，Docker build 使用 uv sync --locked，記錄映像 digest 與實際 Python／套件版本。
-- [ ] 驗證 Compose config、db healthcheck、app 的 openai／psycopg／pytest 匯入與 Python 3.12。使用覆寫入口驗證 DATABASE_URL 可連線且 SELECT 1 成功。
-- [ ] 啟動 db_test 並檢查測試資料獨立性。驗證 secrets 與個人資料排除於 build context 及 Git。
-- [ ] 檢查差異後提交環境設定，Task 1 接著建立 schema 與正式 CLI。
+- [x] 檢查 Git 狀態、repository instructions、docker version、docker compose version 與 Docker engine。若 CLI 或 engine 缺失，診斷實際安裝狀況後處理可恢復設定；需要使用者安裝／啟動時給出明確步驟。
+- [x] 建立鎖定依賴與容器定義。首次以可用 uv 產生 lockfile，Docker build 使用 uv sync --locked，記錄映像 digest 與實際 Python／套件版本。
+- [x] 驗證 Compose config、db healthcheck、app 的 openai／psycopg／pytest 匯入與 Python 3.12。使用覆寫入口驗證 DATABASE_URL 可連線且 SELECT 1 成功。
+- [x] 啟動 db_test 並檢查測試資料獨立性。驗證 secrets 與個人資料排除於 build context 及 Git。
+- [x] 檢查差異後提交環境設定，Task 1 接著建立 schema 與正式 CLI。
 
 ## Task 1 — PostgreSQL schema、交易與重開
 
@@ -183,11 +183,11 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — Store、共用型別、--init-db、--db-info、--seed 與 CLI 離線分支。
 
-- [ ] 加入 test_profile_survives_reopen、test_migrations_repeat_safely、test_unknown_schema_version、test_foreign_keys、test_seed_rejects_nonempty 與 test_seed_failure_rolls_back。固定檢查目標 schema 的設定、來源及筆數。
-- [ ] 透過 Compose 測試入口執行測試，確認尚未提供介面而失敗。
-- [ ] 實作上述 PostgreSQL 表、約束、migration runner、單人狀態列鎖與 request_id 去重。設定 schema 的識別字使用 psycopg.sql 安全組合，查詢限制於該 schema。
-- [ ] 實作初始化、檢查、seed 與 CLI，讀寫 schema_migrations 在同一 migration 交易內。seed 對相同 schema 取得狀態鎖後才檢查是否為空。
-- [ ] 執行 tests/test_demo_store.py，核對重開與重複初始化保留資料，再提交本任務。
+- [x] 加入 test_profile_survives_reopen、test_migrations_repeat_safely、test_unknown_schema_version、test_foreign_keys、test_seed_rejects_nonempty 與 test_seed_failure_rolls_back。固定檢查目標 schema 的設定、來源及筆數。
+- [x] 透過 Compose 測試入口執行測試，確認尚未提供介面而失敗。
+- [x] 實作上述 PostgreSQL 表、約束、migration runner、單人狀態列鎖與 request_id 去重。設定 schema 的識別字使用 psycopg.sql 安全組合，查詢限制於該 schema。
+- [x] 實作初始化、檢查、seed 與 CLI，讀寫 schema_migrations 在同一 migration 交易內。seed 對相同 schema 取得狀態鎖後才檢查是否為空。
+- [x] 執行 tests/test_demo_store.py，核對重開與重複初始化保留資料，再提交本任務。
 
 ## Task 2 — 四道食譜、營養與客製化驗算
 
@@ -195,13 +195,13 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — `scale_nutrients(value, used, reference) -> Nutrients`、`per_box(total, boxes) -> Nutrients`、`used_cost(price, used, package_quantity) -> Decimal`、`validate_targets(actual, targets) -> dict`；Catalog.load、recommend、suggest_additions。
 
-- [ ] 建立合成數字測試，整批 3600 kcal、240 g 蛋白質、390 g 碳水與 120 g 脂肪，八盒各為 450、30、48.75、15。12 USD／1000 g 用 250 g 成本為 3 USD。
-- [ ] 測試含邊界的容差。假設目標 600／40／65／20，通過範圍為 570–630／40–44／58.5–71.5／18–22。任一超出即未達標，計算以 Decimal 完整值判斷，顯示時才四捨五入。
-- [ ] 加入缺營養欄位、零盒／負數／非有限值、生熟或單位不符、無密度資料 g↔ml 換算與未知成本測試，確認先失敗。
-- [ ] 由四份 PDF 抽取食譜與步驟，核對營養來源、價格與份量版本，將已核對／估算／缺漏明確標示。來源 manifest 包含原路徑、hash、頁碼、品牌或 USDA ID。
-- [ ] 實作候選料理、困難步驟、廚具／分批資訊、需買清單與成本估算；客製化提案驗算時回傳四項差距及替換影響，支援後續模型迭代。
-- [ ] 補充建議顯示盒內加加餐的整餐營養，檢查四項限制並保留未達標的差距。僅提供建議不新增攝取。
-- [ ] 執行 tests/test_demo_nutrition.py 通過，人工核對四份來源抽取與來源標示，再提交。
+- [x] 建立合成數字測試，整批 3600 kcal、240 g 蛋白質、390 g 碳水與 120 g 脂肪，八盒各為 450、30、48.75、15。12 USD／1000 g 用 250 g 成本為 3 USD。
+- [x] 測試含邊界的容差。假設目標 600／40／65／20，通過範圍為 570–630／40–44／58.5–71.5／18–22。任一超出即未達標，計算以 Decimal 完整值判斷，顯示時才四捨五入。
+- [x] 加入缺營養欄位、零盒／負數／非有限值、生熟或單位不符、無密度資料 g↔ml 換算與未知成本測試，確認先失敗。
+- [x] 由四份 PDF 抽取食譜與步驟，核對營養來源、價格與份量版本，將已核對／估算／缺漏明確標示。來源 manifest 包含原路徑、hash、頁碼、品牌或 USDA ID。
+- [x] 實作候選料理、困難步驟、廚具／分批資訊、需買清單與成本估算；客製化提案驗算時回傳四項差距及替換影響，支援後續模型迭代。
+- [x] 補充建議顯示盒內加加餐的整餐營養，檢查四項限制並保留未達標的差距。僅提供建議不新增攝取。
+- [x] 執行 tests/test_demo_nutrition.py 通過，人工核對四份來源抽取與來源標示，再提交。
 
 ## Task 3 — 庫存、同次烹調多批成品與加餐方案
 
@@ -209,12 +209,12 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — 個人設定、inventory previews、preview_preparation、preview_batch_addons、confirm_preview。
 
-- [ ] 測試日式咖哩的完整便當六盒與純咖哩一盒建立為兩批。實際食材只扣一遍，兩批的營養與成本按各自組成分配。
-- [ ] 測試 BBQ Mac & Cheese 的含菜五盒與無菜兩盒，分配總量對應 cooking_run。測試各原料成品分配與確認剩料／耗損的合計等於實際用量，超額、少分、同批重複原料與單位不符時拒絕。
-- [ ] 測試預覽不寫商業資料、拒絕保留原狀、庫存不足與中途插入失敗全部回復、重複 request_id 不重複消耗，以及兩個同時確認只有一個可使用原版本。
-- [ ] 執行測試確認失敗，實作 purchase／reconcile、單次烹調與多批建立的原子操作。保存每批營養來源與成本快照。
-- [ ] 實作加餐方案確認及版本保存，測試確認加餐方案不扣食材、不新增飲食紀錄。
-- [ ] 執行 tests/test_demo_preparation.py 通過，提交本任務。
+- [x] 測試日式咖哩的完整便當六盒與純咖哩一盒建立為兩批。實際食材只扣一遍，兩批的營養與成本按各自組成分配。
+- [x] 測試 BBQ Mac & Cheese 的含菜五盒與無菜兩盒，分配總量對應 cooking_run。測試各原料成品分配與確認剩料／耗損的合計等於實際用量，超額、少分、同批重複原料與單位不符時拒絕。
+- [x] 測試預覽不寫商業資料、拒絕保留原狀、庫存不足與中途插入失敗全部回復、重複 request_id 不重複消耗，以及兩個同時確認只有一個可使用原版本。
+- [x] 執行測試確認失敗，實作 purchase／reconcile、單次烹調與多批建立的原子操作。保存每批營養來源與成本快照。
+- [x] 實作加餐方案確認及版本保存，測試確認加餐方案不扣食材、不新增飲食紀錄。
+- [x] 執行 tests/test_demo_preparation.py 通過，提交本任務。
 
 ## Task 4 — 一盒加餐的食用與查詢
 
@@ -222,12 +222,12 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — find_batches、log_meal、preview_reconciled_meal、daily_summary、batch_summary。
 
-- [ ] 測試一盒預設搭配一份優格時，盒數減一、優格庫存減一、日營養為兩者合計，保存實際組成。測試 addon_override 空 list 時只記盒內。
-- [ ] 測試方案之後改變不回寫原事件；重試不重複扣除，零盒拒絕，多個同名候選先澄清。
-- [ ] 測試加餐不足時回傳待釐清狀態，食用與庫存均尚未寫入；經確認的補採買／庫存校正與食用一起提交，中途失敗全部回復。
-- [ ] 執行測試確認失敗，實作食用交易與等待澄清狀態。固定 America/Los_Angeles 時區，clock 可注入以測試跨午夜的昨日解析。
-- [ ] 查詢顯示已記錄備餐的四項營養、目標差距、剩餘盒數、每盒及預設整餐營養。
-- [ ] 執行 tests/test_demo_meals.py 通過，提交。
+- [x] 測試一盒預設搭配一份優格時，盒數減一、優格庫存減一、日營養為兩者合計，保存實際組成。測試 addon_override 空 list 時只記盒內。
+- [x] 測試方案之後改變不回寫原事件；重試不重複扣除，零盒拒絕，多個同名候選先澄清。
+- [x] 測試加餐不足時回傳待釐清狀態，食用與庫存均尚未寫入；經確認的補採買／庫存校正與食用一起提交，中途失敗全部回復。
+- [x] 執行測試確認失敗，實作食用交易與等待澄清狀態。固定 America/Los_Angeles 時區，clock 可注入以測試跨午夜的昨日解析。
+- [x] 查詢顯示已記錄備餐的四項營養、目標差距、剩餘盒數、每盒及預設整餐營養。
+- [x] 執行 tests/test_demo_meals.py 通過，提交。
 
 ## Task 5 — 日期、批次與加餐更正
 
@@ -235,12 +235,12 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — find_events、preview_correction、reject_preview、confirm_preview。
 
-- [ ] 測試日期更正移動盒內加加餐的日營養，批次剩餘與食材總消耗相同，事件 ID 保持。
-- [ ] 測試更正批次恢復來源盒數並扣正確批次，預覽清楚列出將採用的餐點與加餐、營養及庫存差額；使用者確認後一起更新。
-- [ ] 測試本餐沒吃加餐的更正會恢復原扣除食材並減去對應營養，未知新搭配或不足庫存先釐清。
-- [ ] 加入拒絕、過期 preview、無權核准、重複確認、無變更、連線失敗後同 request_id 重試等測試。另測試已提交但回覆遺失、其他操作成功後，再重試原 request_id 仍回傳原成功結果，確認先失敗。
-- [ ] 實作狀態版本、應用程式確認與單交易更正。校正依事件快照計算，不用今天的方案回推歷史。
-- [ ] 執行 tests/test_demo_corrections.py 通過，提交。
+- [x] 測試日期更正移動盒內加加餐的日營養，批次剩餘與食材總消耗相同，事件 ID 保持。
+- [x] 測試更正批次恢復來源盒數並扣正確批次，預覽清楚列出將採用的餐點與加餐、營養及庫存差額；使用者確認後一起更新。
+- [x] 測試本餐沒吃加餐的更正會恢復原扣除食材並減去對應營養，未知新搭配或不足庫存先釐清。
+- [x] 加入拒絕、過期 preview、無權核准、重複確認、無變更、連線失敗後同 request_id 重試等測試。另測試已提交但回覆遺失、其他操作成功後，再重試原 request_id 仍回傳原成功結果，確認先失敗。
+- [x] 實作狀態版本、應用程式確認與單交易更正。校正依事件快照計算，不用今天的方案回推歷史。
+- [x] 執行 tests/test_demo_corrections.py 通過，提交。
 
 ## Task 6 — 主流程與階段內工具迴圈
 
@@ -248,34 +248,33 @@ Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交�
 
 **Interfaces** — Workflow、DemoAgent.handle、共用服務工具 schemas 與模型設定。
 
-- [ ] 假模型測試先選料理再客製化、用量／小幅替換、計算失敗重提、四項符合後請確認、達重試上限等待決定。
-- [ ] 測試保存階段進度與待澄清問題，重開可以查詢或接續；一般食用、查詢、更正直接路由至對應階段。
-- [ ] 測試 --model 優先、環境覆寫預設、實際模型與參數追蹤，以及不同模型不相容參數會明確報錯。
-- [ ] 加入未知工具、非法參數、超過呼叫上限、API 失敗、工具文字偽裝核准與未通過驗算就宣稱符合的回歸測試，先確認失敗。
-- [ ] 實作 Responses API loop 與可驗證的結果呈現。主流程及核准狀態由應用程式管理，完成訊息以成功工具結果為依據。
-- [ ] 對話可調整食譜與解釋基本步驟，使用選定配方、已知廚具與已核對資料。固定值與來源送入 context，評分答案由 evaluator 持有。
-- [ ] 執行 tests/test_demo_agent.py 通過，提交。
+- [x] 假模型測試先選料理再客製化、用量／小幅替換、計算失敗重提、四項符合後請確認、達重試上限等待決定。
+- [x] 測試保存階段進度與待澄清問題，重開可以查詢或接續；一般食用、查詢、更正直接路由至對應階段。
+- [x] 測試 --model 優先、環境覆寫預設、實際模型與參數追蹤，以及不同模型不相容參數會明確報錯。
+- [x] 加入未知工具、非法參數、超過呼叫上限、API 失敗、工具文字偽裝核准與未通過驗算就宣稱符合的回歸測試，先確認失敗。
+- [x] 實作 Responses API loop 與可驗證的結果呈現。主流程及核准狀態由應用程式管理，完成訊息以成功工具結果為依據。
+- [x] 對話可調整食譜與解釋基本步驟，使用選定配方、已知廚具與已核對資料。固定值與來源送入 context，評分答案由 evaluator 持有。
+- [x] 執行 tests/test_demo_agent.py 通過，提交。
 
 ## Task 7 — 完整情境、持久化及備份驗證
 
 **Files** — tests/test_demo_scenario.py、README.md、必要的合成情境。
 
-- [ ] 驗證六餐計畫、實際八盒、確認加餐、吃一餐、改日期、重開後仍剩七盒，原料與加餐扣除均正確。
-- [ ] 驗證四份食譜載入、咖哩兩批與 BBQ 兩批成品、不重複扣原料，以及 Nikujaga 歷史六份與七份方案的區別。
-- [ ] 在 db_test 執行全部 demo 測試，同一 fixture 與 clock 在兩個隔離 schema 產生相同語意結果。固定 tool trace 與資料查核方式。
-- [ ] 使用獨立 Compose project 執行 scripted，明確標示合成情境；再以真正 gpt-6-luna 對話跑一輪並記錄實際用量與結果。模型權限或憑證缺失時保留該項未驗證狀態。
-- [ ] down／up 後讀回相同資料，使用 pg_dump 備份並在獨立環境還原，核對 schema、設定、庫存、批次與事件。
-- [ ] 更新 README 的已完成項目與限制，檢查檔案差異後提交。
+- [x] 驗證六餐計畫、實際八盒、確認加餐、吃一餐、改日期、重開後仍剩七盒，原料與加餐扣除均正確。
+- [x] 驗證四份食譜載入、咖哩兩批與 BBQ 兩批成品、不重複扣原料，以及 Nikujaga 歷史六份與七份方案的區別。
+- [x] 在 db_test 執行全部 demo 測試，同一 fixture 與 clock 在兩個隔離 schema 產生相同語意結果。固定 tool trace 與資料查核方式。
+- [x] 使用獨立 Compose project 執行 scripted，明確標示合成情境；再以真正 gpt-6-luna 對話跑一輪並記錄實際用量與結果。模型權限或憑證缺失時保留該項未驗證狀態。
+- [x] down／up 後讀回相同資料，使用 pg_dump 備份並在獨立環境還原，核對 schema、設定、庫存、批次與事件。
+- [x] 更新 README 的已完成項目與限制，檢查檔案差異後提交。
 
 ## Task 8 — 驗收與課程銜接
 
 **Files** — README.md、本計畫的實際完成核取狀態。
 
 - [ ] 從新 clone 的設定流程走一次啟動、初始化、seed、互動、查詢及重開，每個 V1 功能可對應至操作與通過的檢查。
-- [ ] 核對 Docker／PostgreSQL、預設可切換模型、四項容差、確認範圍、加餐、庫存差異、分開批次與一次扣原料等所有確認決定。
-- [ ] 凍結 demo 設定與工具 schema，記錄模型、SDK、映像、規格及資料版本，列實際完成與未驗證事項。
-- [ ] 交付第一版 Python demo 的證據，課程評估依下列里程碑另行完成。
-
+- [x] 核對 Docker／PostgreSQL、預設可切換模型、四項容差、確認範圍、加餐、庫存差異、分開批次與一次扣原料等所有確認決定。
+- [x] 凍結 demo 設定與工具 schema，記錄模型、SDK、映像、規格及資料版本，列實際完成與未驗證事項。
+- [x] 交付第一版 Python demo 的證據，課程評估依下列里程碑另行完成。
 ## 課程交付的後續里程碑
 
 產品第一版範圍與課程完整交付分別追蹤，講義要求見 `docs/course-requirements.md`。
@@ -296,7 +295,7 @@ Isaac 已確認產品行為。下列為助理補齊的工程預設，可在 deve
 - 每次客製化初始三輪、每回合 12 次模型／24 次工具／三輪澄清；模型初始 reasoning effort 為 medium。正式比較前用開發題定稿。
 - 既有事件採歷史快照，日後方案修改適用後續事件。更正既有事件仍需明確預覽與確認。
 
-計畫自我檢查涵蓋規格、型別、每個決定對應的任務與主要失敗情境。本次文件更新不代表 Task 0–8 已執行。
+計畫自我檢查涵蓋規格、型別、每個決定對應的任務與主要失敗情境。Task 0–7 與 Task 8 的設定凍結及範圍核對已完成；Task 8 尚待最後以新 clone 重走初始化與合成互動流程後勾選。課程評估工作另列里程碑追蹤。
 
 - [PostgreSQL 官方 Docker image 與 PGDATA](https://hub.docker.com/_/postgres)
 - [Compose 健康檢查與啟動順序](https://docs.docker.com/compose/how-tos/startup-order/)

@@ -40,17 +40,32 @@ class Workflow:
             state.update(stage='cooking',accepted_recipe=p['id'])
             result=Result(True,{'accepted_recipe':p,'message':'已確認配方；烹調完成後仍需確認實際用量與批次。'})
         elif cmd in ('/confirm','/reject') and len(parts)==2:
-            if state.get('pending_preview')!=parts[1]:return Result(False,{},'Confirmation must match the displayed pending preview')
+            if state.get('pending_preview')!=parts[1]:
+                with self.store.transaction() as c:
+                    prior=c.execute('SELECT 1 FROM operations WHERE request_id=%s',('user-confirm:'+parts[1],)).fetchone()
+                if cmd=='/confirm' and prior:
+                    return self.service.confirm_preview(parts[1],request_id='user-confirm:'+parts[1])
+                return Result(False,{},'Confirmation must match the displayed pending preview')
             if cmd=='/confirm':
                 result=self.service.confirm_preview(parts[1],request_id='user-confirm:'+parts[1])
-                if result.ok:state.update(stage='ready',pending_preview=None)
+                if result.ok:
+                    next_stage='ready' if state.get('pending_preview_kind')=='preparation' else state.get('preview_return_stage','ready')
+                    state.update(stage=next_stage,pending_preview=None,preview_return_stage=None,pending_preview_kind=None)
             else:
                 result=self.service.reject_preview(parts[1])
-                if result.ok:state.update(pending_preview=None,stage='ready')
+                if result.ok:state.update(pending_preview=None,stage=state.get('preview_return_stage','ready'),preview_return_stage=None,pending_preview_kind=None)
         elif cmd=='/new-plan':
-            state.update(stage='inventory_confirmation',inventory_confirmed=False,selected_recipe=None,proposal=None,
+            if state.get('pending_preview'):self.service.reject_preview(state['pending_preview'])
+            state.update(pending_preview=None,preview_return_stage=None,pending_preview_kind=None,stage='inventory_confirmation',inventory_confirmed=False,selected_recipe=None,proposal=None,
                          accepted_recipe=None,attempts=0,clarifications=0,waiting_question=None)
             result=Result(True,{'inventory':self.service.list_inventory().data,'message':'請核對庫存，再輸入 /inventory-ok。'})
+        elif cmd=='/preview' and len(parts)==1:
+            pending=state.get('pending_preview')
+            with self.store.transaction() as c:
+                row=c.execute('SELECT * FROM previews WHERE id=%s',(pending,)).fetchone() if pending else None
+            if not row:return Result(False,{},'No pending preview')
+            return Result(True,{'id':row['id'],'kind':row['kind'],'state_version':row['state_version'],
+                                'status':row['status'],'changes':row['data']['changes'],'summary':row['data']['summary']})
         elif cmd=='/batches':return self.service.batch_summary()
         elif cmd=='/inventory':return self.service.list_inventory()
         elif cmd=='/daily' and len(parts)<=2:return self.service.daily_summary(parts[1] if len(parts)==2 else 'today')

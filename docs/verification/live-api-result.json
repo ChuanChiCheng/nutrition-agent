@@ -1,0 +1,266 @@
+{
+  "ok": true,
+  "synthetic": true,
+  "model_ids": [
+    "gpt-6-luna"
+  ],
+  "model_calls": 17,
+  "tool_calls": 13,
+  "input_tokens": 79575,
+  "output_tokens": 1809,
+  "stages": [
+    {
+      "stage": "start",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 4,
+        "tool_calls": 3
+      },
+      "tools": [
+        {
+          "name": "start_planning",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "list_inventory",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "get_profile",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "customize",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 4,
+        "tool_calls": 3
+      },
+      "tools": [
+        {
+          "name": "select_recipe",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "propose_recipe",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "get_recipe",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "preparation",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 1,
+        "tool_calls": 1
+      },
+      "tools": [
+        {
+          "name": "preview_preparation",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "addons",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 1,
+        "tool_calls": 1
+      },
+      "tools": [
+        {
+          "name": "preview_batch_addons",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "meal",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 2,
+        "tool_calls": 1
+      },
+      "tools": [
+        {
+          "name": "log_meal",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "correction",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 2,
+        "tool_calls": 2
+      },
+      "tools": [
+        {
+          "name": "find_events",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "preview_correction",
+          "ok": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "stage": "query",
+      "ok": true,
+      "error": null,
+      "counts": {
+        "model_calls": 3,
+        "tool_calls": 2
+      },
+      "tools": [
+        {
+          "name": "daily_summary",
+          "ok": true,
+          "error": null
+        },
+        {
+          "name": "batch_summary",
+          "ok": true,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "remaining_boxes": 7,
+  "inventory": {
+    "fixture_mix": "200",
+    "fixture_yogurt": "9"
+  },
+  "corrected_summary": {
+    "day": "2026-11-16",
+    "scope": "recorded_prepared_meals_only",
+    "events": 1,
+    "box": {
+      "kcal": "450",
+      "protein_g": "30",
+      "carbs_g": "48.75",
+      "fat_g": "15"
+    },
+    "addons": {
+      "kcal": "100",
+      "protein_g": "15",
+      "carbs_g": "8",
+      "fat_g": "1"
+    },
+    "total": {
+      "kcal": "550",
+      "protein_g": "45",
+      "carbs_g": "56.75",
+      "fat_g": "16"
+    },
+    "daily_targets": {
+      "kcal": "1800",
+      "fat_g": "60",
+      "carbs_g": "195",
+      "protein_g": "120"
+    },
+    "progress": {
+      "kcal": {
+        "actual": "550",
+        "target": "1800",
+        "difference": "-1250",
+        "ratio": "0.3055555555555555555555555556"
+      },
+      "fat_g": {
+        "actual": "16",
+        "target": "60",
+        "difference": "-44",
+        "ratio": "0.2666666666666666666666666667"
+      },
+      "carbs_g": {
+        "actual": "56.75",
+        "target": "195",
+        "difference": "-138.25",
+        "ratio": "0.2910256410256410256410256410"
+      },
+      "protein_g": {
+        "actual": "45",
+        "target": "120",
+        "difference": "-75",
+        "ratio": "0.375"
+      }
+    },
+    "needs_daily_target": false
+  },
+  "post_fix_smoke": {
+    "synthetic_only": true,
+    "model_ids": [
+      "gpt-6-luna"
+    ],
+    "meal_intent_gate": {
+      "ok": true,
+      "model_calls": 3,
+      "tool_calls": 2,
+      "input_tokens": 8739,
+      "output_tokens": 250,
+      "tools": [
+        "find_batches",
+        "log_meal"
+      ],
+      "tool_results_ok": [
+        true,
+        true
+      ],
+      "database_postcondition": {
+        "events": 1,
+        "remaining_boxes": 7
+      }
+    },
+    "grounded_cooking_question": {
+      "ok": true,
+      "model_calls": 3,
+      "tool_calls": 2,
+      "input_tokens": 36040,
+      "output_tokens": 209,
+      "tools": [
+        "get_recipe",
+        "explain_cooking"
+      ],
+      "tool_results_ok": [
+        true,
+        true
+      ],
+      "selected_source_evidence": [
+        {
+          "id": "source:2:1",
+          "page": 2
+        },
+        {
+          "id": "source:1:1",
+          "page": 1
+        }
+      ]
+    }
+  }
+}

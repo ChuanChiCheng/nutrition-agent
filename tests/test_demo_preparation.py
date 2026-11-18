@@ -132,3 +132,18 @@ def test_profile_timezone_controls_date_resolution(service):
     assert service.set_profile({'timezone':'Asia/Taipei','meal_targets':{'kcal':600,'protein_g':40,'carbs_g':65,'fat_g':20},
                                 'daily_targets':{'kcal':1800,'protein_g':120,'carbs_g':195,'fat_g':60}}).ok
     assert service.daily_summary('today').data['day']=='2026-11-18'
+
+
+def test_preparation_preview_shows_actual_per_box_nutrition_and_status(stocked):
+    s=stocked
+    assert s.set_profile({'timezone':'America/Los_Angeles','meal_targets':{'kcal':600,'protein_g':40,'carbs_g':65,'fat_g':20},
+                          'daily_targets':{'kcal':1800,'protein_g':120,'carbs_g':195,'fat_g':60}}).ok
+    p=s.preview_preparation('curry',[{'ingredient_id':'chicken','quantity':800,'unit':'g','state':'raw'},
+                                   {'ingredient_id':'rice','quantity':400,'unit':'g','state':'dry'}],
+        [B('actual eight',8,[A('chicken',800,'g'),A('rice',400,'g')])],'today')
+    assert p.ok,p
+    output=next(x for x in p.data['changes'] if x.get('batch')=='actual eight')
+    assert D(output['box_nutrients']['kcal'])==200
+    assert D(output['box_cost']['total'])==D('1.5')
+    assert output['targets']['passed'] is False
+    assert s.store.info()['counts']['cooking_runs']==0

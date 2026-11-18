@@ -60,20 +60,34 @@ class NutritionService:
             row=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
             return row['data'] if row else {'needs_setup':True}
 
+    def _validated_profile(self,c,values):
+        row=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+        merged={**(row['data'] if row else {}),**values}
+        ZoneInfo(merged['timezone'])
+        for field in ('meal_targets','daily_targets'):
+            if field not in merged:raise ValueError('Meal and daily targets required separately')
+            target=Nutrients.from_dict(merged[field]);validate_targets(target,target)
+            merged[field]=target
+        if 'container_ml' in merged:merged['container_ml']=decimal(merged['container_ml'],positive=True)
+        return encode(merged)
+
+    def _apply_profile(self,c,values):
+        merged=self._validated_profile(c,values)
+        c.execute('INSERT INTO profile VALUES(1,%s) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(jsonb(merged),))
+        return merged
+
     @safe
     def set_profile(self,values):
         with self.store.transaction(lock=True) as c:
-            row=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
-            merged={**(row['data'] if row else {}),**values}
-            ZoneInfo(merged['timezone'])
-            for field in ('meal_targets','daily_targets'):
-                if field not in merged:raise ValueError('Meal and daily targets required separately')
-                target=Nutrients.from_dict(merged[field]);validate_targets(target,target)
-                merged[field]=target
-            if 'container_ml' in merged:merged['container_ml']=decimal(merged['container_ml'],positive=True)
-            c.execute('INSERT INTO profile VALUES(1,%s) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(jsonb(merged),))
+            result=self._apply_profile(c,values)
             self._advance(c)
-            return encode(merged)
+            return result
+
+    @safe
+    def preview_profile(self,values):
+        with self.store.transaction(lock=True) as c:
+            values=self._validated_profile(c,values)
+            return self._preview(c,'profile',values,[{'profile':values}],'確認營養目標、時區與廚具設定後保存。')
 
     @safe
     def list_inventory(self):
@@ -258,7 +272,8 @@ class NutritionService:
                 if p['state_version']!=self._version(c):raise ValueError('Stale preview; regenerate and confirm new changes')
                 if (self.clock()-p['created_at']).total_seconds()>1800:raise ValueError('Expired preview; regenerate')
                 payload=p['data']['payload'];kind=p['kind']
-                if kind=='inventory':result=self._apply_inventory(c,payload)
+                if kind=='profile':result=self._apply_profile(c,payload)
+                elif kind=='inventory':result=self._apply_inventory(c,payload)
                 elif kind=='preparation':result=self._apply_preparation(c,payload,request_id)
                 elif kind=='addons':
                     c.execute('INSERT INTO batch_addons VALUES(%s,%s,%s)',(payload['batch_id'],payload['version'],jsonb({'items':payload['items']})))

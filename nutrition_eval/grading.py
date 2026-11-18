@@ -27,6 +27,8 @@ _NUMERIC_FIELDS = {
     "kcal", "protein_g", "carbs_g", "fat_g", "container_ml", "reference_quantity",
     "package_quantity", "usd", "cost", "known_subtotal", "total",
 }
+# The full snapshot retains these for trace/debugging, while grade_state scores final business data.
+_OPERATIONAL_TABLES = {"previews", "operations", "workflow_sessions"}
 
 
 def _number(value):
@@ -120,7 +122,8 @@ def grade_state(task, actual: dict) -> GradePart:
         return GradePart(False, ["actual business state is not an object"])
 
     reasons = []
-    for key in sorted(set(expected) | set(actual)):
+    compared_keys = (set(expected) | set(actual)) - _OPERATIONAL_TABLES
+    for key in sorted(compared_keys):
         if key not in expected:
             reasons.append(f"unexpected business state field: {key}")
         elif key not in actual:

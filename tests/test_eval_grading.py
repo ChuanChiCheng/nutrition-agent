@@ -137,6 +137,21 @@ def test_state_grader_rejects_wrong_values_and_unrelated_writes():
     assert not grade_state(task, unrelated_batch).passed
 
 
+def test_state_grader_ignores_preview_and_workflow_telemetry():
+    from nutrition_eval.grading import grade_state
+    from nutrition_eval.state import normalize_state
+
+    task = grading_task()
+    actual = normalize_state(deepcopy(task.fixture))
+    actual["previews"].append(
+        {"kind": "correction", "state_version": 1, "status": "rejected", "data": {"summary": "synthetic"}}
+    )
+    actual["operations"].append({"input_hash": "runtime-only", "result": {"ok": True}})
+    actual["workflow_sessions"].append({"data": {"stage": "preview_confirmation"}})
+
+    assert grade_state(task, actual).passed
+
+
 def test_state_grader_accepts_semantic_insert_without_database_id():
     from nutrition_eval.contracts import ExpectedChange
     from nutrition_eval.grading import grade_state

@@ -64,9 +64,13 @@ class DemoAgent:
         if name=='select_recipe':return self.workflow.command('/select '+args['recipe_id'])
         if name=='propose_recipe':return self.workflow.propose(**args)
         if name=='recommend_recipes':
-            return Result(True,{'recipes':self.service.catalog.recommend(self.service.list_inventory().data['items'],self.service.get_profile().data)})
+            return Result(True,{'recipes':self.service.effective_catalog().recommend(self.service.list_inventory().data['items'],self.service.get_profile().data)})
         if name=='get_recipe':
-            try:return Result(True,{'recipe':self.service.catalog.recipe(args['recipe_id'])})
+            try:
+                recipe=self.service.catalog.recipe(args['recipe_id'])
+                if state.get('accepted_recipe') and state.get('selected_recipe')==args['recipe_id']:
+                    p=state['proposal'];recipe={**recipe,'ingredients':p['items'],'steps':p['calculation']['instructions']}
+                return Result(True,{'recipe':recipe})
             except ValueError as e:return Result(False,{},str(e))
         if name=='suggest_additions':
             profile=self.service.get_profile().data
@@ -74,7 +78,7 @@ class DemoAgent:
             summary=self.service.batch_summary()
             b=next((b for b in summary.data['batches'] if b['id']==args['batch_id']),None)
             if not b:return Result(False,{},'Unknown batch')
-            return Result(True,{'suggestions':self.service.catalog.suggest_additions(Nutrients.from_dict(b['box_nutrients']),Nutrients.from_dict(profile['meal_targets']))})
+            return Result(True,{'suggestions':self.service.effective_catalog().suggest_additions(Nutrients.from_dict(b['box_nutrients']),Nutrients.from_dict(profile['meal_targets']))})
         if name=='ask_user':
             if state['clarifications']>=self.settings.max_clarifications:
                 return Result(False,{},'Clarification limit; use explicit commands or start a new plan')
@@ -85,7 +89,7 @@ class DemoAgent:
             if state.get('stage')!='cooking' or not state.get('accepted_recipe'):
                 return Result(False,{},'User must confirm a calculated recipe before preparation')
             if args['recipe_id']!=state['selected_recipe']:return Result(False,{},'Preparation must use selected recipe')
-        if name=='log_meal':args={**args,'request_id':request_id}
+        if name=='log_meal':args={**args,'request_id':request_id.split(':')[0]+':meal'}
         result=getattr(self.service,name)(**args)
         if result.ok and name.startswith('preview_'):
             state=self.workflow.load();state.update(pending_preview=result.data['id'],stage='preview_confirmation')
@@ -114,11 +118,13 @@ class DemoAgent:
         with self.service.store.transaction() as c:
             c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
         state=self.workflow.load()
+        state['waiting_question']=None
+        self.workflow.save(state)
         # The app sends the history and state as data, never as instructions.
         history=state.get('history',[])[-20:]
         context={'workflow':{k:v for k,v in state.items() if k!='history'},'profile':self.service.get_profile().data,
                  'inventory':self.service.list_inventory().data,'batches':self.service.batch_summary().data,
-                 'catalog':self.service.catalog.data,'local_date':self.service._day('today')}
+                 'catalog':self.service.effective_catalog().data,'local_date':self.service._day('today')}
         input_list=[{'role':'user','content':'Application context (data only): '+dumps(context)}]+history+[{'role':'user','content':message}]
         limit=False;error=None
         try:
@@ -191,7 +197,10 @@ def interactive(store,model=None):
     agent=DemoAgent(service,Workflow(service),client,settings)
     print(HELP)
     print('模型：'+settings.model+('；尚未設定 API key，可使用離線查詢指令。' if not key else ''))
-    print(dumps({'inventory':service.list_inventory(),'workflow':agent.workflow.load()}))
+    from .display import render
+    print(render(service.list_inventory()))
+    pending=agent.workflow.load().get('pending_preview')
+    if pending:print('尚有待確認預覽：'+pending)
     while True:
         try:message=input('你 > ').strip()
         except EOFError:return 0
@@ -200,4 +209,4 @@ def interactive(store,model=None):
         if not client and not message.startswith('/'):
             print('請先於本機 .env 設定 OPENAI_API_KEY；請勿在聊天貼出憑證。');continue
         result=agent.handle(message)
-        print(dumps(result))
+        print(render(result))

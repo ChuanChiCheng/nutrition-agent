@@ -68,8 +68,9 @@ class Workflow:
         try:
             profile=self.service.get_profile().data
             if 'meal_targets' not in profile:raise ValueError('Set separate meal and daily targets before customization')
-            self.service.catalog.validate_proposal(state['selected_recipe'],items)
-            calc=self.service.catalog.calculate(state['selected_recipe'],items,boxes,Nutrients.from_dict(profile['meal_targets']))
+            catalog=self.service.effective_catalog()
+            catalog.validate_proposal(state['selected_recipe'],items)
+            calc=catalog.calculate(state['selected_recipe'],items,boxes,Nutrients.from_dict(profile['meal_targets']))
             state['proposal']=encode({'id':str(uuid4()),'calculation':calc,'items':items,'boxes':boxes})
             state['stage']='recipe_confirmation' if state['attempts']<3 else 'customization_limit'
             result=Result(True,state['proposal'])

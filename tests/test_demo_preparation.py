@@ -107,3 +107,28 @@ def test_profile_requires_separate_daily_target(service):
                           'daily_targets':{'kcal':1800,'protein_g':120,'carbs_g':195,'fat_g':60},'equipment':['6 Qt Instant Pot'],'container_ml':1000})
     assert p.ok
     assert service.get_profile().data['daily_targets']['kcal']=='1800'
+
+
+def test_confirmed_product_label_persists_and_overrides_generic_data(stocked):
+    s=stocked
+    values={'reference_quantity':'100','nutrients':{'kcal':'150','protein_g':'25','carbs_g':'1','fat_g':'3'},
+            'source_note':'使用者轉錄實際購入包裝','source_url':'https://example.com/product-label',
+            'price':{'usd':'10','quantity':'1000'}}
+    p=s.preview_product_label('chicken',values)
+    assert p.ok,p
+    assert s.effective_catalog().snapshot({'ingredient_id':'chicken','quantity':100,'unit':'g','state':'raw'})['nutrients'].kcal==100
+    assert s.confirm_preview(p.data['id'],'label').ok
+    assert s.effective_catalog().snapshot({'ingredient_id':'chicken','quantity':100,'unit':'g','state':'raw'})['nutrients'].kcal==150
+    from nutrition_demo.service import NutritionService
+    reopened=NutritionService(s.store,s.catalog)
+    assert reopened.effective_catalog().ingredient('chicken')['source']['status']=='user_label_confirmed'
+    p=s.preview_preparation('curry',[{'ingredient_id':'chicken','quantity':100,'unit':'g','state':'raw'}],
+        [B('label batch',1,[A('chicken',100,'g')])],'today')
+    assert s.confirm_preview(p.data['id'],'label-cook').ok
+    assert s.batch_summary().data['batches'][0]['box_nutrients']['kcal']==150
+
+
+def test_profile_timezone_controls_date_resolution(service):
+    assert service.set_profile({'timezone':'Asia/Taipei','meal_targets':{'kcal':600,'protein_g':40,'carbs_g':65,'fat_g':20},
+                                'daily_targets':{'kcal':1800,'protein_g':120,'carbs_g':195,'fat_g':60}}).ok
+    assert service.daily_summary('today').data['day']=='2026-11-18'

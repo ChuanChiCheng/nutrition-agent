@@ -22,6 +22,7 @@ PROFILE=obj({'timezone':S,'meal_targets':NUTRIENTS,'daily_targets':NUTRIENTS,
              'equipment':array(S),'container_ml':Q})
 SCHEMAS={
  'get_profile':obj({}),
+ 'preview_product_label':obj({'ingredient_id':S,'values':obj({'reference_quantity':Q,'nutrients':NUTRIENTS,'source_note':S,'source_url':NULLSTR,'price':{'anyOf':[obj({'usd':Q,'quantity':Q}),{'type':'null'}]}})}),
  'preview_profile':obj({'values':PROFILE}),
  'list_inventory':obj({}),
  'start_planning':obj({}),

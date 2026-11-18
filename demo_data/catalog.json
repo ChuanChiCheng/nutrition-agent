@@ -80,7 +80,12 @@
         "page": 4,
         "checked_on": "2026-11-17",
         "note": "歷史成本；不是即時售價，缺漏不當零"
-      }
+      },
+      "product_url": "https://www.walmart.com/ip/Great-Value-Broccoli-Florets-32-oz-Bag-Frozen/745725724",
+      "link_status": "verified_product_page",
+      "link_checked_on": "2026-11-17",
+      "package_quantity": "907",
+      "package_unit": "g"
     },
     {
       "id": "potato",
@@ -404,7 +409,12 @@
         "page": 4,
         "checked_on": "2026-11-17",
         "note": "歷史成本；不是即時售價，缺漏不當零"
-      }
+      },
+      "product_url": "https://business.walmart.com/ip/S-B-Golden-Curry-Sauce-Mix-Medium-Hot-3-2-Oz/398367908?classType=VARIANT",
+      "link_status": "verified_product_page",
+      "link_checked_on": "2026-11-17",
+      "package_quantity": "92",
+      "package_unit": "g"
     },
     {
       "id": "broth",
@@ -666,7 +676,9 @@
           ]
         }
       ],
-      "allowed_substitutions": [],
+      "allowed_substitutions": [
+        "mushroom"
+      ],
       "source_recipe_id": "curry",
       "data_status": "source_recipe_requires_actual_quantities",
       "default_requested_boxes": 6
@@ -782,7 +794,9 @@
           "note": "不能自動寫成已完成的七盒"
         }
       ],
-      "allowed_substitutions": [],
+      "allowed_substitutions": [
+        "mushroom"
+      ],
       "source_recipe_id": "nikujaga",
       "data_status": "source_recipe_requires_actual_quantities",
       "default_requested_boxes": 6
@@ -891,7 +905,9 @@
           ]
         }
       ],
-      "allowed_substitutions": [],
+      "allowed_substitutions": [
+        "carrot"
+      ],
       "source_recipe_id": "bbq",
       "data_status": "source_recipe_requires_actual_quantities",
       "default_requested_boxes": 6

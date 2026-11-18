@@ -41,7 +41,7 @@ def catalog():
                 'price':{'usd':price,'quantity':reference,'status':'synthetic'}}
     return Catalog({'ingredients':[item('chicken',[100,10,5,2]),item('rice',[200,5,40,1],'g','dry'),
                                    item('broccoli',[20,2,3,0]),item('yogurt',[100,15,8,1],'serving','packaged',reference='1')],
-                    'recipes':[{'id':'curry','name':'synthetic curry','ingredients':[], 'essential_ingredients':['chicken'],
+                    'recipes':[{'id':'curry','name':'synthetic curry','ingredients':[{'ingredient_id':i} for i in ['chicken','rice','broccoli']], 'essential_ingredients':['chicken'],
                                 'allowed_substitutions':['chicken','rice','broccoli'],'steps':['synthetic'],
                                 'equipment':[],'difficulty':[]} ]})
 

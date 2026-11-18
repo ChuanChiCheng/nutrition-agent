@@ -1,0 +1,106 @@
+{
+  "synthetic": true,
+  "description": "合成驗收情境，營養值只驗證計算與流程，不代表真實料理或 Isaac 的個人目標",
+  "profile": {
+    "timezone": "America/Los_Angeles",
+    "meal_targets": {
+      "kcal": "450",
+      "protein_g": "30",
+      "carbs_g": "48.75",
+      "fat_g": "15"
+    },
+    "daily_targets": {
+      "kcal": "1800",
+      "protein_g": "120",
+      "carbs_g": "195",
+      "fat_g": "60"
+    },
+    "equipment": [
+      "synthetic pot"
+    ],
+    "container_ml": "1000"
+  },
+  "inventory": [
+    {
+      "ingredient_id": "fixture_mix",
+      "quantity": "1000",
+      "unit": "g",
+      "state": "synthetic"
+    },
+    {
+      "ingredient_id": "fixture_yogurt",
+      "quantity": "10",
+      "unit": "serving",
+      "state": "synthetic"
+    }
+  ],
+  "catalog": {
+    "ingredients": [
+      {
+        "id": "fixture_mix",
+        "name": "合成原料",
+        "unit": "g",
+        "state": "synthetic",
+        "reference_quantity": "100",
+        "nutrients": {
+          "kcal": "450",
+          "protein_g": "30",
+          "carbs_g": "48.75",
+          "fat_g": "15"
+        },
+        "source": {
+          "status": "synthetic"
+        },
+        "price": {
+          "usd": "12",
+          "quantity": "1000",
+          "status": "synthetic"
+        }
+      },
+      {
+        "id": "fixture_yogurt",
+        "name": "合成加餐",
+        "unit": "serving",
+        "state": "synthetic",
+        "reference_quantity": "1",
+        "nutrients": {
+          "kcal": "100",
+          "protein_g": "15",
+          "carbs_g": "8",
+          "fat_g": "1"
+        },
+        "source": {
+          "status": "synthetic"
+        },
+        "price": null
+      }
+    ],
+    "recipes": [
+      {
+        "id": "curry",
+        "name": "合成備餐（非實際咖哩）",
+        "ingredients": [
+          {
+            "ingredient_id": "fixture_mix",
+            "quantity": "600",
+            "unit": "g",
+            "state": "synthetic"
+          }
+        ],
+        "essential_ingredients": [
+          "fixture_mix"
+        ],
+        "allowed_substitutions": [],
+        "equipment": [
+          "synthetic pot"
+        ],
+        "difficulty": [
+          "synthetic"
+        ],
+        "steps": [
+          "只供流程驗證，非實際食譜"
+        ]
+      }
+    ]
+  }
+}

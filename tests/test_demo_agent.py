@@ -155,3 +155,22 @@ def test_profile_model_tool_requires_user_confirmation(service):
     assert service.get_profile().data.get('needs_setup') is True
     assert a.handle('/confirm '+r.data['pending_preview']).ok
     assert service.get_profile().data['daily_targets']['kcal']=='1800'
+
+
+def test_repeated_tool_call_cannot_record_same_meal_twice(prepared):
+    s,b=prepared
+    args={'batch_id':b,'eaten_on':'today','meal':'lunch','addon_override':None}
+    a=agent(s,[[('log_meal',args)],[('log_meal',args)],[]])
+    r=a.handle('我吃了一盒午餐')
+    assert r.ok
+    assert s.store.info()['counts']['events']==1
+    assert s.batch_summary().data['batches'][0]['remaining_boxes']==7
+
+
+def test_followup_clears_previous_question(prepared):
+    s,b=prepared
+    a=agent(s,[[('ask_user',{'question':'你吃哪個批次？'})]])
+    a.handle('吃了一盒')
+    a.client.responses=Responses([[('log_meal',{'batch_id':b,'eaten_on':'today','meal':None,'addon_override':None})],[]])
+    r=a.handle('是這個批次 '+b)
+    assert r.data['waiting_question'] is None

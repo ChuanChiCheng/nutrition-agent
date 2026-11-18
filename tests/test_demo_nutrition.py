@@ -84,3 +84,36 @@ def test_exact_division_without_rounded_reciprocal():
     from nutrition_demo.nutrition import per_box,scale_nutrients
     assert per_box(Nutrients(1980,0,0,0),6).kcal==D(330)
     assert scale_nutrients(Nutrients(700,0,0,0),D(600),D(700)).kcal==D(600)
+
+
+def test_only_one_minor_new_ingredient_substitution():
+    from nutrition_demo.catalog import Catalog
+    c=Catalog.load()
+    c.recipes['curry']['allowed_substitutions']=['mushroom','beef']
+    base=[{'ingredient_id':i,'quantity':100,'unit':c.ingredient(i)['unit'],'state':c.ingredient(i)['state']} for i in ['chicken','potato','curry_block']]
+    assert c.validate_proposal('curry',base+[{'ingredient_id':'mushroom','quantity':100,'unit':'g','state':'raw'}])
+    with pytest.raises(ValueError,match='substitution'):
+        c.validate_proposal('curry',base+[{'ingredient_id':'mushroom','quantity':100,'unit':'g','state':'raw'},
+                                         {'ingredient_id':'beef','quantity':100,'unit':'g','state':'raw'}])
+
+
+def test_verified_product_links_include_package_counts():
+    from nutrition_demo.catalog import Catalog
+    recipes=Catalog.load().recommend([],{})
+    curry=next(r for r in recipes if r['id']=='curry')
+    shopping={i['ingredient_id']:i for i in curry['shopping']}
+    assert shopping['curry_block']['packages_needed']==3
+    assert shopping['broccoli']['packages_needed']==1
+    assert shopping['curry_block']['link_status']=='verified_product_page'
+
+
+def test_customized_steps_use_confirmed_quantities():
+    from nutrition_demo.catalog import Catalog
+    c=Catalog.load()
+    items=[{'ingredient_id':i,'quantity':q,'unit':c.ingredient(i)['unit'],'state':c.ingredient(i)['state']}
+           for i,q in [('chicken','1200'),('potato','600'),('curry_block','184'),('rice','480')]]
+    r=c.calculate('curry',items,6)
+    text='\n'.join(r['instructions'])
+    assert '600' in text and '92' in text
+    assert '1097' not in text and '1097' not in text.replace(',','')
+    assert '花椰菜' not in text

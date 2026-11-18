@@ -1,5 +1,6 @@
 """Authoritative domain operations. Models never receive the confirmation capability."""
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, date, timedelta, timezone as utc_timezone
 from decimal import Decimal
@@ -42,7 +43,10 @@ class NutritionService:
         self.clock=clock or (lambda:datetime.now(utc_timezone.utc))
 
     def _day(self,value):
-        today=self.clock().astimezone(self.timezone).date()
+        with self.store.transaction() as c:
+            row=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+        zone=ZoneInfo(row['data'].get('timezone',str(self.timezone))) if row else self.timezone
+        today=self.clock().astimezone(zone).date()
         if value in ('today','今天',None):return today.isoformat()
         if value in ('yesterday','昨天'):return (today-timedelta(days=1)).isoformat()
         try:return date.fromisoformat(value).isoformat()
@@ -94,17 +98,18 @@ class NutritionService:
         with self.store.transaction() as c:
             return {'items':c.execute('SELECT * FROM inventory ORDER BY ingredient_id').fetchall()}
 
-    def _items(self,items,*,nutrition=True):
+    def _items(self,items,*,nutrition=True,c=None):
+        catalog=self.effective_catalog(c)
         if not isinstance(items,list):raise ValueError('Items must be a list')
         if len({i['ingredient_id'] for i in items})!=len(items):raise ValueError('Duplicate ingredient')
         result=[]
         for item in items:
-            ref=self.catalog.ingredient(item['ingredient_id'])
+            ref=catalog.ingredient(item['ingredient_id'])
             if item['unit']!=ref['unit'] or item['state']!=ref['state']:
                 raise ValueError('Unit/state mismatch; clarify density or raw/cooked basis')
             quantity=decimal(item['quantity'])
             if nutrition:
-                result.append(encode(self.catalog.snapshot({**item,'quantity':quantity})))
+                result.append(encode(catalog.snapshot({**item,'quantity':quantity})))
             else:
                 result.append({'ingredient_id':item['ingredient_id'],'quantity':str(quantity),
                                'unit':item['unit'],'state':item['state'],'source':ref['source']})
@@ -174,6 +179,7 @@ class NutritionService:
         if any(allocated[id]!=decimal(i['quantity']) for id,i in usage.items()):
             raise ValueError('Ingredient allocation must conserve total usage exactly')
         with self.store.transaction(lock=True) as c:
+            actual=self._items(actual_usage,c=c)
             self._check_stock(c,actual)
             payload={'recipe_id':recipe_id,'actual_usage':actual,'outputs':outputs,
                      'prepared_on':self._day(prepared_on),'dispositions':dispositions}
@@ -195,6 +201,7 @@ class NutritionService:
         items=self._items(items)
         with self.store.transaction(lock=True) as c:
             self._batch(c,batch_id)
+            items=self._items(items,c=c)
             version=self._addons(c,batch_id)['version']+1
             return self._preview(c,'addons',{'batch_id':batch_id,'items':items,'version':version},
                                  [{'batch_id':batch_id,'items':items,'version':version}],
@@ -272,7 +279,8 @@ class NutritionService:
                 if p['state_version']!=self._version(c):raise ValueError('Stale preview; regenerate and confirm new changes')
                 if (self.clock()-p['created_at']).total_seconds()>1800:raise ValueError('Expired preview; regenerate')
                 payload=p['data']['payload'];kind=p['kind']
-                if kind=='profile':result=self._apply_profile(c,payload)
+                if kind=='product_label':result=self._apply_product_label(c,payload)
+                elif kind=='profile':result=self._apply_profile(c,payload)
                 elif kind=='inventory':result=self._apply_inventory(c,payload)
                 elif kind=='preparation':result=self._apply_preparation(c,payload,request_id)
                 elif kind=='addons':
@@ -322,7 +330,7 @@ class NutritionService:
         b=self._batch(c,batch_id)
         if b['remaining_boxes']<=0:raise ValueError('No boxes remaining')
         addons=self._addons(c,batch_id)
-        items=addons['data']['items'] if addon_override is None else self._items(addon_override)
+        items=addons['data']['items'] if addon_override is None else self._items(addon_override,c=c)
         if check_stock:self._check_stock(c,items)
         box=n(b['data']['box_nutrients']);extra=sum((n(i['nutrients']) for i in items),ZERO)
         return encode({'batch_id':batch_id,'batch_name':b['name'],'eaten_on':self._day(eaten_on),'meal':meal,
@@ -436,7 +444,7 @@ class NutritionService:
                 if changes['addon_override'] is None:
                     plan=self._addons(c,new['batch_id'])
                     new.update({'addon_items':plan['data']['items'],'addon_version':plan['version']})
-                else:new['addon_items']=self._items(changes['addon_override'])
+                else:new['addon_items']=self._items(changes['addon_override'],c=c)
             new['addon_nutrients']=encode(sum((n(i['nutrients']) for i in new['addon_items']),ZERO))
             new['total_nutrients']=encode(n(new['box_nutrients'])+n(new['addon_nutrients']))
             if new==old:raise ValueError('No changes to event')
@@ -465,3 +473,41 @@ class NutritionService:
         c.execute('UPDATE events SET batch_id=%s,eaten_on=%s,meal=%s,data=%s WHERE id=%s',
                   (new['batch_id'],new['eaten_on'],new['meal'],jsonb(new),event['id']))
         return {'event_id':event['id'],'event':new}
+
+
+    def effective_catalog(self,c=None):
+        from .catalog import Catalog
+        if c is None:
+            with self.store.transaction() as conn:return self.effective_catalog(conn)
+        data=deepcopy(self.catalog.data)
+        overrides={r['ingredient_id']:r['data'].get('product_label') for r in c.execute('SELECT ingredient_id,data FROM inventory').fetchall()}
+        for item in data['ingredients']:
+            if overrides.get(item['id']):item.update(overrides[item['id']])
+        return Catalog(data,self.catalog.manifest)
+
+    @safe
+    def preview_product_label(self,ingredient_id,values):
+        self.catalog.ingredient(ingredient_id)
+        if set(values)-{'reference_quantity','nutrients','source_note','source_url','price'}:
+            raise ValueError('Unknown product label fields')
+        reference=decimal(values['reference_quantity'],positive=True)
+        nutrients=Nutrients.from_dict(values['nutrients'])
+        if not values.get('source_note','').strip():raise ValueError('Label provenance required')
+        price=values.get('price')
+        if price is not None:
+            price={'usd':decimal(price['usd']),'quantity':decimal(price['quantity'],positive=True),
+                   'currency':'USD','basis':'user_confirmed_package','checked_on':self._day('today')}
+        label={'reference_quantity':reference,'nutrients':nutrients,'price':price,
+               'source':{'status':'user_label_confirmed','note':values['source_note'],
+                         'url':values.get('source_url'),'checked_on':self._day('today')}}
+        with self.store.transaction(lock=True) as c:
+            return self._preview(c,'product_label',{'ingredient_id':ingredient_id,'label':label},
+                                 [{'ingredient_id':ingredient_id,'label':label}],
+                                 '確認實際商品標示與計價基準；只影響後續計算，歷史事件保留原快照。')
+
+    def _apply_product_label(self,c,payload):
+        ref=self.catalog.ingredient(payload['ingredient_id'])
+        c.execute('INSERT INTO inventory(ingredient_id,quantity,unit,state,data) VALUES(%s,0,%s,%s,%s) '
+                  "ON CONFLICT(ingredient_id) DO UPDATE SET data=jsonb_set(inventory.data,'{product_label}',excluded.data->'product_label')",
+                  (ref['id'],ref['unit'],ref['state'],jsonb({'product_label':payload['label']})))
+        return {'ingredient_id':ref['id'],'label_updated':True}

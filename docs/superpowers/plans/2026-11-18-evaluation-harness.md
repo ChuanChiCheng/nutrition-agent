@@ -62,12 +62,13 @@
 - `GradePart(passed: bool, reasons: list[str])`, `EpisodeGrade(passed: bool, state: GradePart, order: GradePart, reply: GradePart)`, and `ScoredEpisode(task: EvalTask, episode: EpisodeResult, grade: EpisodeGrade)`.
 - `SuiteResult(status: str, episodes: list[EpisodeResult], error: str | None)`; `status` is `complete` or `incomplete`.
 
-- [ ] Write `test_load_tasks_rejects_invalid_json_duplicate_ids_and_missing_fields`; assert each input raises a task/line-specific `ValueError`.
-- [ ] Write `test_formal_taskset_requires_50_three_edges_two_unanswerables`; assert 49 rows, duplicate IDs, only two edge labels, or one unanswerable label each fail.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py -q`; confirm the new tests fail because the module is absent.
-- [ ] Implement dataclasses, strict JSONL parsing, validation and controller input projection using existing `jsonschema` dependency.
-- [ ] Rerun the targeted command and confirm all schema tests pass without an OpenAI key.
-- [ ] Commit `feat: define evaluation task contract`.
+- [x] Write `test_load_tasks_rejects_invalid_json_duplicate_ids_and_missing_fields`; assert each input raises a task/line-specific `ValueError`.
+- [x] Write `test_expected_change_requires_semantic_match_and_parses_into_contract`; assert expected deltas become typed records and generated-record inserts require semantic match fields.
+- [x] Write `test_formal_taskset_requires_50_three_edges_two_unanswerables`; assert 49 rows, duplicate IDs, only two edge labels, or one unanswerable label each fail.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py -q`; confirm the new tests fail because the module is absent.
+- [x] Implement dataclasses, strict JSONL parsing and taskset validation using existing `jsonschema` dependency. Keep task answer projection in the episode runner and controller factory boundary.
+- [x] Rerun the targeted command and confirm all schema tests pass without an OpenAI key.
+- [x] Commit `feat: define evaluation task contract`.
 
 ## Task 2: Isolated Fixture Loading and State Snapshot
 
@@ -85,7 +86,7 @@
 - [ ] Write `test_episode_schema_is_removed_after_success_and_exception`; assert the schema is absent after both context exits.
 - [ ] Write `test_fixture_loader_rejects_personal_database_and_nonempty_schema`; assert production host/db and an already seeded schema are refused before task execution.
 - [ ] Ensure `docker compose --profile test up -d --wait db_test` has completed before running the database-backed fixture tests.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_fixtures.py -q`; confirm failures before implementation.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_fixtures.py -q`; confirm failures before implementation.
 - [ ] Implement the schema context manager and transactionally seed/read/normalize fixture state using `Store.transaction()` and parameterized SQL.
 - [ ] Rerun `tests/test_eval_fixtures.py -q`; confirm state preservation, exception cleanup and DB safety guard pass.
 - [ ] Commit `feat: isolate evaluation fixture state`.
@@ -100,13 +101,13 @@
 - `AgentController(agent: DemoAgent, workflow: Workflow)` delegates message handling to `DemoAgent.handle()` and binds approvals to the current workflow preview via `/confirm <id>` or `/reject <id>`.
 - `FixedWorkflowBaseline(service: NutritionService, workflow: Workflow, client, settings)` uses one constrained structured-action extraction per user message; the structured result contains an action, arguments and user-facing reply, while Python applies a fixed routing table and calls the same service operations. Clarification is a structured action and subsequent answers re-enter the same fixed route. It does not expose a model-selected tool loop or select a new operation after observing tool results. It uses the same model identity/settings, context, resource limits, fixtures and approvals as Agent.
 
-`agent_factory(store, task, config) -> Controller` and `baseline_factory(store, task, config) -> Controller` construct each controller against the current episode's service and workflow.
+`agent_factory(store, config) -> Controller` and `baseline_factory(store, config) -> Controller` construct each controller against the current episode's service and workflow. Factories receive no `EvalTask`; the runner alone holds scripted answers, approvals and grading fields.
 
 - [ ] Write `test_agent_adapter_passes_message_and_preview_id_to_application_confirmation`; use a fake DemoAgent/workflow and assert the exact current preview ID is used.
-- [ ] Write `test_agent_adapter_never_passes_task_answer_key`; assert the adapter sends only the current user message to `DemoAgent.handle()` and never serializes `EvalTask.expected_changes`, `required_order` or `reply_rubric`.
+- [ ] Write `test_controller_factory_receives_no_task_or_rubric`; assert controller factories accept only the current Store and EvalConfig, so answer keys and scripted future answers remain runner-only.
 - [ ] Write `test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response`; fake the model response and assert the baseline follows the fixed Python route without a second model-driven operation choice.
 - [ ] Write `test_baseline_uses_same_service_for_inventory_meal_and_correction`; inject a spy service and assert only the shared public service methods perform writes.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_controllers.py -q`; confirm failure before implementation.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_controllers.py -q`; confirm failure before implementation.
 - [ ] Implement the protocol/adapters and closed action schema; use task/fixture input only, never expected changes or rubrics.
 - [ ] Rerun controller tests and the existing `tests/test_demo_agent.py -q` to verify the adapter does not change V1 behavior.
 - [ ] Commit `feat: add fixed workflow evaluation baseline`.
@@ -128,7 +129,7 @@
 - [ ] Write `test_suite_runs_agent_three_times_and_baseline_once`; assert each formal task creates three isolated Agent episodes and one isolated baseline episode.
 - [ ] Write `test_turns_model_calls_latency_and_tokens_aggregate_across_messages`; use fake usage/clock values and assert exact totals.
 - [ ] Write `test_controller_failure_is_failed_episode_but_setup_error_incompletes_suite`; assert controller exception/budget exhaustion returns a failed EpisodeResult, while fixture failure stops the suite as incomplete.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_episode.py -q`; confirm expected failures before implementation.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_episode.py -q`; confirm expected failures before implementation.
 - [ ] Implement the episode loop, trace aggregation, monotonic latency, timeout/resource policy and suite orchestration; preserve partial controller trace on failure.
 - [ ] Rerun `tests/test_eval_episode.py -q` and existing `tests/test_demo_scenario.py -q`.
 - [ ] Commit `feat: run isolated scripted evaluation episodes`.
@@ -150,7 +151,7 @@
 - [ ] Write `test_unanswerable_reply_requires_no_invention_and_no_state_change`; assert any invented nutrition claim or new event fails.
 - [ ] Write `test_reply_judge_parses_each_rubric_criterion_and_excludes_usage`; fake judge JSON and verify each criterion contributes to pass and judge tokens remain separate.
 - [ ] Write `test_judge_outage_marks_suite_incomplete_without_final_metrics`; assert partial judge results are not reported as a complete evaluation.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_grading.py -q`; confirm failures before implementation.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_grading.py -q`; confirm failures before implementation.
 - [ ] Implement deterministic state/trace grading and the versioned judge adapter; select judge model and exact parameters at implementation time, then freeze them before formal evaluation.
 - [ ] Rerun `tests/test_eval_grading.py -q`; validate the grader against correct and deliberately incorrect fixtures.
 - [ ] Commit `feat: grade evaluation state process and responses`.
@@ -167,7 +168,7 @@
 - [ ] Run the dev cases against fake controllers and judge to verify state, order, answer, and report failures are detected as intended; adjust rubric/schema before formal authoring.
 - [ ] Author exactly 50 formal cases using the approved category quotas; tag at least five approved edge scenarios and two unanswerables. Keep all fixture values and provenance explicit.
 - [ ] Write `eval_config.json` with one frozen Los Angeles clock, model ID/effort, call/time/token limits, judge version, tool version and dataset version; exclude credentials.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_taskset.py -q`; assert 50 tasks, 3+ edges, 2+ unanswerables, valid provenance and answer-key projection.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_taskset.py -q`; assert 50 tasks, 3+ edges, 2+ unanswerables, valid provenance and answer-key projection.
 - [ ] Commit `test: add development and 50 task evaluation sets`.
 
 ## Task 7: CLI, Summary Report and Run Documentation
@@ -183,11 +184,11 @@
 - [ ] Write `test_report_computes_pass_at_3_pass_power_3_flips_and_percentile`; use fixed synthetic run data to assert exact accuracy, metrics, and nearest-rank p95.
 - [ ] Write `test_report_saves_episode_samples_and_metadata`; assert raw rows retain controller, task, repeat, model/tool/fixture versions and failures.
 - [ ] Write `test_cli_aborts_before_execution_on_invalid_taskset_or_unsafe_database`; assert no controller call occurs.
-- [ ] Run `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_report.py -q`; confirm they fail before implementation.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_report.py -q`; confirm they fail before implementation.
 - [ ] Implement the CLI orchestration: run controllers, grade every episode, mark judge interruption incomplete, aggregate only complete scored runs, and preserve raw partial episodes plus status metadata; document that Agent has 150 episode samples and baseline 50.
 - [ ] Update README with test DB startup, no-key dry run, formal-run command, output files, frozen settings and the separate 200-task/safety-suite scope.
-- [ ] Run `docker compose --profile test up -d --wait db_test` and `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py tests/test_eval_fixtures.py tests/test_eval_controllers.py tests/test_eval_episode.py tests/test_eval_grading.py tests/test_eval_taskset.py tests/test_eval_report.py -q`; confirm all evaluation tests pass.
-- [ ] Run the complete existing suite with `docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/ -q`; confirm V1 tests remain green.
+- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py tests/test_eval_fixtures.py tests/test_eval_controllers.py tests/test_eval_episode.py tests/test_eval_grading.py tests/test_eval_taskset.py tests/test_eval_report.py -q`; confirm all evaluation tests pass.
+- [ ] Run the complete existing suite with `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/ -q`; confirm V1 tests remain green.
 - [ ] Run the fake-client development dry run and inspect generated JSONL/Markdown output; do not label it as a live-model comparison.
 - [ ] Commit `feat: report agent baseline evaluation results`.
 

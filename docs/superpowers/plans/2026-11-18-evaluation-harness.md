@@ -130,15 +130,17 @@
 - One assistant reply counts as one turn. Model calls are counted separately. Tokens sum all controller call input/output usage. Latency spans initial request through final reply and includes controller model/service work; it excludes scripted waits and judge calls.
 - After an explicit `ask_user` result, runner sends the next scripted answer if available. If the controller skips the question, it receives no answer. A scripted approval/rejection is sent only after the current preview appears and uses that live preview ID.
 
-- [ ] Write `test_episode_replays_answer_only_after_ask_user`; assert no answer is supplied if controller skips the clarification and the next scripted answer is supplied after the structured ask.
-- [ ] Write `test_approval_waits_for_preview_and_binds_current_id`; assert approval before preview is impossible and mismatched IDs fail the episode process check.
-- [ ] Write `test_each_repeat_reloads_same_fixture_and_clock`; run a fake mutating controller three times and assert each starts from the original inventory/batch counts and same app clock.
-- [ ] Write `test_suite_runs_agent_three_times_and_baseline_once`; assert each formal task creates three isolated Agent episodes and one isolated baseline episode.
-- [ ] Write `test_turns_model_calls_latency_and_tokens_aggregate_across_messages`; use fake usage/clock values and assert exact totals.
-- [ ] Write `test_controller_failure_is_failed_episode_but_setup_error_incompletes_suite`; assert controller exception/budget exhaustion returns a failed EpisodeResult, while fixture failure stops the suite as incomplete.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_episode.py -q`; confirm expected failures before implementation.
-- [ ] Implement the episode loop, trace aggregation, monotonic latency, timeout/resource policy and suite orchestration; preserve partial controller trace on failure.
-- [ ] Rerun `tests/test_eval_episode.py -q` and existing `tests/test_demo_scenario.py -q`.
+- [x] Write `test_episode_replays_answer_only_after_ask_user`; assert no answer is supplied if controller skips the clarification and the next scripted answer is supplied after the structured ask.
+- [x] Write `test_approval_waits_for_preview_and_binds_current_id`; assert approval before preview is impossible, hidden preview IDs are not approved, and mismatched IDs fail the episode process check.
+- [x] Write `test_each_repeat_reloads_same_fixture_and_clock`; run fake mutating controllers and assert every repeat starts from the original fixture with the same app clock.
+- [x] Write `test_suite_runs_agent_three_times_and_baseline_once`; assert each formal task creates three isolated Agent episodes and one isolated baseline episode.
+- [x] Write `test_run_suite_creates_and_cleans_real_episode_schemas`; assert the real test database uses four unique schemas and removes them after the suite.
+- [x] Write `test_turns_model_calls_latency_and_tokens_aggregate_across_messages`; use fake usage/clock values and assert exact totals.
+- [x] Write `test_controller_failure_is_failed_episode_but_setup_error_incompletes_suite`; assert controller exception/budget exhaustion returns a failed EpisodeResult, while fixture failure stops the suite as incomplete.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_episode.py -q`; confirm expected failures before implementation.
+- [x] Implement the episode loop, trace aggregation, monotonic latency, timeout/resource policy and suite orchestration; preserve partial controller trace on failure.
+- [x] Rerun `tests/test_eval_episode.py -q` and existing `tests/test_demo_scenario.py -q`; controller, episode and existing scenario tests pass.
+- [x] Run the full suite; confirm all 132 tests pass.
 - [ ] Commit `feat: run isolated scripted evaluation episodes`.
 
 ## Task 5: Independent Grader and Rubric Judge

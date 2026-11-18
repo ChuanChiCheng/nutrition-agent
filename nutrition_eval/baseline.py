@@ -130,16 +130,23 @@ class FixedWorkflowBaseline:
             "baseline-" + uuid4().hex,
             user_message=message,
         )
-        reply = action["reply"]
+        model_reply = action["reply"]
+        reply = model_reply
         if action["action"] == "ask_user" and operation.ok:
             reply = operation.data.get("waiting_question", reply)
         elif not operation.ok:
             reply = operation.error or "此操作未完成，請確認資料後再試。"
+        elif action["action"].startswith("preview_"):
+            preview_id = self.workflow.load().get("pending_preview")
+            if preview_id:
+                reply = f"請核對預覽 {preview_id}。"
         self._save_history(message, reply)
         result_data = {
             "action": action["action"],
             "arguments": action["arguments"],
             "message": reply,
+            "model_reply": model_reply,
+            "pending_preview": self.workflow.load().get("pending_preview"),
             "operation": encode(operation),
             "trace": [
                 model_trace,

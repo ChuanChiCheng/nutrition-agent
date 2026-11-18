@@ -107,4 +107,4 @@ related: ["[[50 Projects/Personal Scrum/Projects/EEP500 Nutrition Agent Final Pr
 - 同一次烹調中，不同餐點組成分成不同批次，各批每盒組成一致。該次實際烹調食材總用量只扣一次。
 - 更正日期、批次或加餐前顯示預覽並確認，依原紀錄的組成與營養快照計算差額。
 
-整合後的實作計畫為 `/Users/wolverine/Develop/nutrition-agent/docs/superpowers/plans/2026-11-17-nutrition-demo.md`。上述為已確認決定，程式實作與環境驗證尚待執行。
+整合後的實作計畫為 `/Users/wolverine/Develop/nutrition-agent/docs/superpowers/plans/2026-11-17-nutrition-agent-v1.md`。上述為已確認決定，程式實作與環境驗證尚待執行。

@@ -6,7 +6,7 @@ updated: 2026-11-17
 topics: [agentic-ai, meal-prep, python-demo]
 entities: [EEP 500, Nutrition Agent]
 sources: ["[[00 Inbox/EEP500 Nutrition Agent — 備餐流程訪談]]"]
-related: ["full-product-scope.md", "../superpowers/plans/2026-11-17-nutrition-demo.md"]
+related: ["full-product-scope.md", "../superpowers/plans/2026-11-17-nutrition-agent-v1.md"]
 ---
 
 # Nutrition Agent 第一版 Python Demo 範圍
@@ -71,7 +71,7 @@ related: ["full-product-scope.md", "../superpowers/plans/2026-11-17-nutrition-de
 ## 文件連結
 
 - [完整產品範圍](full-product-scope.md)
-- [實作計畫](../superpowers/plans/2026-11-17-nutrition-demo.md)
+- [實作計畫](../superpowers/plans/2026-11-17-nutrition-agent-v1.md)
 - [課程要求對照](../course-requirements.md)
 
 原始訪談來源為 `/Users/wolverine/Library/Mobile Documents/iCloud~md~obsidian/Documents/wolverine-mind-palace/00 Inbox/EEP500 Nutrition Agent — 備餐流程訪談.md`。

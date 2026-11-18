@@ -1,8 +1,8 @@
-# Nutrition Agent Python Demo Implementation Plan
+# Nutrition Agent V1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal** — 依 Isaac 的實際備餐流程，建立可持續保存資料的單人 Python demo，完成料理選擇、營養客製化、分裝、食用與更正。
+**Goal** — 依 Isaac 的實際備餐流程，建立可持續保存資料的單人 Python V1，完成料理選擇、營養客製化、分裝、食用與更正。
 
 **Architecture** — Docker Compose 管理 Python app 與 PostgreSQL。固定主流程的各階段內使用彈性工具迴圈，營養計算、庫存、核准與交易集中在共用服務。互動使用持久化資料，後續評估使用相同服務與工具，從各題隔離的初始狀態執行。
 

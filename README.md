@@ -6,7 +6,7 @@ Isaac 的備餐助理。完整產品目標為 iOS App，第一個開發里程碑
 
 - [完整產品範圍](docs/specs/full-product-scope.md)
 - [第一版 Python demo 範圍](docs/specs/v1-python-demo-scope.md)
-- [實作計畫](docs/superpowers/plans/2026-11-17-nutrition-demo.md)
+- [實作計畫](docs/superpowers/plans/2026-11-17-nutrition-agent-v1.md)
 - [課程要求對照](docs/course-requirements.md)
 
 ## 狀態與範圍

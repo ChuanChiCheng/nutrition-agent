@@ -167,20 +167,22 @@
 
 **Selected judge settings for Task 6 `eval_config.json`:** `gpt-6.1-terra`, reasoning effort `low`, `max_output_tokens: 1024`, `store: false`, structured response schema, and rubric version `nutrition-reply-judge-v1`. This separates the judge from the `gpt-6-luna` controller model; the formal run remains pending.
 
+**State grading boundary:** the normalized snapshot retains `previews`, `operations` and `workflow_sessions` for diagnosis, but final business-state scoring excludes these process records. The interaction-order grader evaluates previews, approval and writes directly.
+
 ## Task 6: Development Cases and Formal 50-Task Dataset
 
 **Files:** `development_tasks.jsonl`, `tasks.jsonl`, `eval_config.json`, `tests/test_eval_taskset.py`.
 
 **Interfaces:** `load_tasks()` and `validate_taskset()` from Task 1; fixture seeding and grader behavior from Tasks 2 and 5.
 
-- [ ] Write `test_development_cases_are_separate_and_formal_dataset_exactly_50`; assert development records are not counted and final file has 50 unique IDs.
-- [ ] Write `test_formal_taskset_matches_approved_category_counts`; assert counts are 10/8/7/8/10/5/2 for nutrition, preparation, addons, meal logging, corrections, queries and unanswerable.
-- [ ] Author 3–5 development cases: one ordinary successful write, one clarification/approval sequence, one unanswerable response and at least one nutrition or allocation edge; include correct and intentionally incorrect grading samples.
-- [ ] Run the dev cases against fake controllers and judge to verify state, order, answer, and report failures are detected as intended; adjust rubric/schema before formal authoring.
-- [ ] Author exactly 50 formal cases using the approved category quotas; tag at least five approved edge scenarios and two unanswerables. Keep all fixture values and provenance explicit.
-- [ ] Write `eval_config.json` with one frozen Los Angeles clock, model ID/effort, call/time/token limits, judge version, tool version and dataset version; exclude credentials.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_taskset.py -q`; assert 50 tasks, 3+ edges, 2+ unanswerables, valid provenance and answer-key projection.
-- [ ] Commit `test: add development and 50 task evaluation sets`.
+- [x] Write `test_development_cases_are_separate_and_formal_dataset_exactly_50`; assert development records are not counted and final file has 50 unique IDs.
+- [x] Write `test_formal_taskset_matches_approved_category_counts`; assert counts are 10/8/7/8/10/5/2 for nutrition, preparation, addons, meal logging, corrections, queries and unanswerable.
+- [x] Author 3–5 development cases: one ordinary successful write, one clarification/approval sequence, one unanswerable response and at least one nutrition or allocation edge; include correct and intentionally incorrect grading samples.
+- [x] Run the dev cases against fake controllers and judge to verify state, order and answer failures; verify report failure handling in Task 7.
+- [x] Author exactly 50 formal cases using the approved category quotas; tag at least five approved edge scenarios and two unanswerables. Keep all fixture values and provenance explicit.
+- [x] Write `eval_config.json` with one frozen Los Angeles clock, model ID/effort, call/time/token limits, judge version, tool version and dataset version; exclude credentials.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_taskset.py -q`; assert 50 tasks, 3+ edges, 2+ unanswerables, valid provenance and answer-key projection.
+- [x] Commit `test: add development and 50 task evaluation sets`.
 
 ## Task 7: CLI, Summary Report and Run Documentation
 

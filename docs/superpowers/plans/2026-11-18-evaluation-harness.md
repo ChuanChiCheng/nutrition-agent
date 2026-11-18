@@ -107,14 +107,17 @@
 
 `agent_factory(store, catalog: Catalog, config) -> Controller` and `baseline_factory(store, catalog: Catalog, config) -> Controller` construct each controller against the current episode's service and workflow. The runner builds `Catalog` from the task fixture and passes that safe dependency; factories receive no `EvalTask`, so scripted answers and grading fields remain runner-only.
 
-- [ ] Write `test_agent_adapter_passes_message_and_preview_id_to_application_confirmation`; use a fake DemoAgent/workflow and assert the exact current preview ID is used.
-- [ ] Write `test_controller_factory_receives_catalog_but_no_task_or_rubric`; assert controller factories accept Store, Catalog and EvalConfig, but not EvalTask, so answer keys and scripted future answers remain runner-only.
-- [ ] Write `test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response`; fake the model response and assert the baseline follows the fixed Python route without a second model-driven operation choice.
-- [ ] Write `test_baseline_uses_same_service_for_inventory_meal_and_correction`; inject a spy service and assert only the shared public service methods perform writes.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_controllers.py -q`; confirm failure before implementation.
-- [ ] Implement the protocol/adapters and closed action schema; use task/fixture input only, never expected changes or rubrics.
-- [ ] Rerun controller tests and the existing `tests/test_demo_agent.py -q` to verify the adapter does not change V1 behavior.
-- [ ] Commit `feat: add fixed workflow evaluation baseline`.
+- [x] Write `test_agent_adapter_passes_message_and_preview_id_to_application_confirmation`; use a fake DemoAgent/workflow and assert the exact current preview ID is used.
+- [x] Write `test_controller_factory_receives_catalog_but_no_task_or_rubric`; assert controller factories accept Store, Catalog and EvalConfig, but not EvalTask, so answer keys and scripted future answers remain runner-only.
+- [x] Write `test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response`; fake the model response and assert the baseline follows the fixed Python route without a second model-driven operation choice.
+- [x] Write `test_baseline_uses_same_service_for_inventory_meal_and_correction`; inject a spy service and assert only the shared public service methods perform writes.
+- [x] Write `test_baseline_rejects_arguments_outside_the_selected_action_schema`; assert a malformed action cannot reach a service write.
+- [x] Write `test_baseline_approval_uses_only_the_current_preview_id`; assert approval routes only the currently displayed preview identifier.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_controllers.py -q`; confirm failure before implementation.
+- [x] Implement the protocol/adapters and closed action schema; use task/fixture input only, never expected changes or rubrics.
+- [x] Rerun controller tests and existing Agent tests; confirm 30 pass.
+- [x] Run the full test suite; confirm all 125 tests pass.
+- [x] Commit `feat: add fixed workflow evaluation baseline`.
 
 ## Task 4: Scripted Episode Runner and Metrics Capture
 

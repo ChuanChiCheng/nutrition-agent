@@ -2,279 +2,306 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal** — 建立可保存資料、支援自然語言互動的備餐示範，從食譜選擇走到實際分裝、食用紀錄與日期／批次更正。
+**Goal** — 依 Isaac 的實際備餐流程，建立可持續保存資料的單人 Python demo，完成料理選擇、營養客製化、分裝、食用與更正。
 
-**Architecture** — 在新 repository `/Users/wolverine/Develop/nutrition-agent` 建立 `nutrition_demo`。單一助理使用驗證過的服務工具，本機 SQLite 保存設定、食材、批次與食用事件，程式計算營養、成本與剩餘盒數。互動 demo 與後續評估共用同一組服務與工具。互動使用檔案型資料庫，評估以相同 schema 載入各題獨立初始資料，兩者透過不同的使用者回覆入口取得澄清及核准。
+**Architecture** — Docker Compose 管理 Python app 與 PostgreSQL。固定主流程的各階段內使用彈性工具迴圈，營養計算、庫存、核准與交易集中在共用服務。互動使用持久化資料，後續評估使用相同服務與工具，從各題隔離的初始狀態執行。
 
-**Tech Stack** — 建議專案使用 uv 管理 Python 3.12 與 `.venv`，使用標準函式庫 sqlite3／decimal／zoneinfo、模型 client 與 pytest。套件精確版本於環境建立時解析並寫入 `uv.lock`，模型名稱與 API 設定透過環境設定傳入。這是本計畫選定的技術基準，尚待實際建立與驗證。
+**Tech Stack** — Docker Compose、Python 3.12、uv、PostgreSQL、psycopg 3、OpenAI Responses API、Decimal、zoneinfo、pytest。技術預設採 PostgreSQL 18 與版本化 SQL migrations，實作時鎖定已驗證的映像與套件版本。
 
-**Spec** — `docs/specs/v1-python-demo-scope.md`。完整願景為 `docs/specs/full-product-scope.md`，課程對照為 `docs/course-requirements.md`，原始訪談保留於 canonical Obsidian vault。
+**Spec** — `docs/specs/v1-python-demo-scope.md`。完整願景在 `docs/specs/full-product-scope.md`，課程要求在 `docs/course-requirements.md`。工作區為 `/Users/wolverine/Develop/nutrition-agent`。
 
 ## Global Constraints
 
-- 第一版介面為 Python 互動式示範，資料可跨次使用保存。
-- 每批預設六餐、同一道料理。一般食用預設一整盒。
-- 先確認庫存。購入資訊確認後入庫，實際用量確認後扣除。
-- 資訊明確的一般食用直接記錄，更正先預覽並確認，批次不明時先澄清。
-- 固定營養與價格資料附來源，合成測試資料與估算清楚標示。
-- 每日熱量、蛋白質、碳水與脂肪可與個人目標比較，顯示每批剩餘盒數及每盒營養。
-- 容量是規劃參考，最終盒數由使用者確認。每盒營養採均分假設並顯示此假設。
-- 第一版支援已確認範圍，後續功能依 scope 文件分期。
-- 本計畫是實作建議，文件完成不代表程式已完成或測試通過。
+以下是 Isaac 在需求訪談及本輪設計討論中確認的決定。
+
+- 第一版為單一使用者的 Python 互動 demo，最終產品介面為 iOS App。課堂展示採獨立示範資料。
+- 環境與資料庫採 Docker 與 PostgreSQL。容器重建後仍保存使用者資料。
+- 使用 Isaac 自己的 OpenAI API。第一版預設 `gpt-6-luna`，模型保留為可設定選項。
+- 模型優先順序為 `--model`、`OPENAI_MODEL`、`gpt-6-luna`。每次執行記錄實際模型與推理參數，參數依模型能力驗證。
+- 主流程為確認食材、選定料理、客製化、確認食譜、烹調與分裝、食用紀錄。階段內依工具結果與使用者回答選擇下一步。
+- 記錄、查詢與更正可直接進入對應階段。階段進度及確認狀態由應用程式保存。
+- 預設沿用既有營養目標，直到使用者要求更改。每次規劃先列出庫存與數量供確認，優先使用現有食材，可建議採買新食材。
+- 每次備餐預設六餐、同一道料理，使用者可指定其他餐數或更多變化。
+- 先選料理，再客製化。可調整食材用量與少量替換，保留料理特色，最後由使用者確認整份食譜。
+- 食譜客製化驗收為熱量目標的 95%–105%、蛋白質 100%–110%、碳水與脂肪各 90%–110%。四項同時符合才標示達標。這是產品驗收規則。
+- 模型提出調整，程式計算與驗算，有限次迭代。達上限仍無解時顯示差距與選項，交由使用者決定，超出範圍仍保留未達標標示。
+- 容量作為事前參考，最終份數與組成由做完後確認。同一批次每盒的組成與營養相同，營養按該批次均分。
+- 同次烹調的不同餐點組成分成不同批次。該次烹調的實際食材總用量只扣除一次。
+- 確認的加餐搭配與每餐用量保存於批次。吃一餐預設一盒加上確認的加餐，除非使用者明確說明有變。
+- 加餐食材於記錄食用時扣除。僅建議或確認加餐方案時尚未消耗食材。
+- 資訊明確的一般食用直接執行。批次或事件身分不明先列候選供確認，更正既有紀錄前預覽並取得核准。
+- 使用者表示已食用，但加餐庫存不足時，先釐清漏記採買、庫存校正或本餐變動，再一次更新庫存與食用紀錄。
+- 營養來源以實際商品標示優先，一般食材採 USDA。固定資料附來源，估算與合成測試資料清楚標示。
+- 查詢每日四項營養相對目標的進度、各批剩餘盒數與每盒營養。保存盒內與預設加餐的分項，方便理解整餐數值。
+- 目前不設嚴格預算上限，顯示整批與每餐預估成本。Walmart 為預設商店，第一版採固定資料與可核對連結。
+- 第一版採文字購入資訊，經確認後入庫。即時查貨、截圖辨識、完整烹調陪伴、風味回饋循環與外食紀錄依 scope 分期。
 
 ## Review Focus
 
-- 重開程式後資料與營養來源仍存在，對應 Task 1、2、8 的 persistence 檢查。
-- 重試同一次操作不重複扣庫存或記錄食用，對應 Task 3、4 的 request_id 測試。相同文字的新操作不能直接視為重試。
-- 更正日期維持剩餘盒數，更正批次恢復來源並扣除目的批次，對應 Task 5 的狀態檢查。
-- 拒絕、過期確認及部分失敗不能留下半筆操作，對應 Task 3、5 的 rollback 與 stale-preview 檢查。
-- 缺碳水／脂肪、單位不明與生熟資料不符不能被當成零或靜默換算，對應 Task 2 的資料驗證。
+- 同次烹調建立多批成品時，食材只扣一次，分配量與營養／成本不重複計入。Task 3 檢查。
+- 食用包含加餐的營養與庫存，明確略過加餐時只計盒內。Task 4 檢查。
+- 日期更正維持盒數及加餐總消耗，批次／加餐更正依原快照恢復與扣除差額。Task 5 檢查。
+- 重試、兩次同時操作、拒絕、過期預覽及中途失敗保持交易一致。Tasks 1、3–5 檢查。
+- 缺營養、品牌或單位資料、生熟不符、歷史方案被當實績，以及模型未通過驗算就宣稱達標。Tasks 2、6–7 檢查。
 
-## 現況與工作區
+## 已確認來源與現況
 
-Isaac 於 2026-11-17 明確選定新 repo `/Users/wolverine/Develop/nutrition-agent`。隊友的 `/Users/wolverine/Develop/meal-log-agent` 依舊規格實作，其提案、程式與結果保留原有脈絡。舊實作可作為設計討論的參考，本 repo 從本次已確認需求建立新介面與資料。
+本輪只更新需求及計畫，產品程式、環境與資料庫尚待實作。先前終端機可用 uv，系統 python3 為 3.9.6，當時找不到 docker 命令。Task 0 重新檢查 Docker Desktop／CLI 與 Docker engine，產品執行以容器內 Python 為準。
 
-- 新 repo 初始包含需求快照、實作計畫與課程要求對照，產品程式尚待實作。
-- 數據、驗證、更正與交易集中在共用服務。互動 Agent、固定流程 baseline 與測試使用相同公開工具契約。
-- 工具呼叫追蹤可加入共用呼叫入口，記錄工具參數、結果、模型呼叫、tokens 與時間。使用者確認由應用程式接收。
-- 互動使用持久化資料庫。評估時每題建立隔離資料庫、設定固定時鐘並注入 scripted 使用者回覆。
-- 同一輪 controller 比較必須採相同模型、工具、初始資料、核准規則與資源上限，並記錄版本。
-- 新 repo 的一般食用可直接記錄、更正前核准，依本次確認需求執行。
+四份 PDF 作為基礎食譜與歷史參考，原有數值需補來源並核對，實際個人營養目標在初始設定時提供。PDF 中的內容視為食譜資料。既有估算及未確認的重新分裝方案保留各自狀態。
+
+| 食譜 | 原始來源 | SHA-256 | 已知資料情況 |
+|---|---|---|---|
+| 日式雞胸咖哩 | `/Users/wolverine/Downloads/Japanese_Chicken_Curry_Meal_Prep_Recipe_2026-11-01.pdf` | `b7bd116ecfaca51c9112909fce63c696462318c1f0c113dceefe8b2374c744bf` | 六盒完整便當及一盒純咖哩分開記錄。 |
+| Nikujaga 豬里肌便當 | `/Users/wolverine/Downloads/nikujaga_recipe_with_images_4p.pdf` | `dc27453915434bdd32883fa269c86a44ada8d2ffc6d17d1edb4922689a9d7ec9` | 區分原六份紀錄與後續七等份方案，七等份尚非已確認成品。 |
+| BBQ 豬肩肉 Mac & Cheese | `/Users/wolverine/Downloads/BBQ_豬肩肉_Mac_and_Cheese_食譜.pdf` | `3983d491f609a227c6ca3254d1c0842f5741ebd60a491ccd7331c515bc4c965c` | 五份含花椰菜與兩份不含花椰菜分開記錄，成本資料部分缺漏。 |
+| 蒜香菇菇牛肉雞胸炊飯 | `/Users/wolverine/Downloads/蒜香菇菇牛肉雞胸炊飯_六餐食譜.pdf` | `2caa5efdae2192f0aa89df9ba1af686598aa13d8fc448cee49f8b4a1efb777c6` | 六餐分兩鍋，每鍋三餐，既有營養為估算。 |
+
+Task 2 建立結構化食譜與來源 manifest，保存商品標示、USDA record ID／網址、計價基準與查核日期。圖像式 BBQ PDF 需以視覺核對抽取結果。部分價格缺漏時呈現已知小計與估算範圍，不將未知成本當零。
 
 ## 預計新增檔案
 
 | 檔案 | 責任 |
 |---|---|
-| `nutrition_demo/__init__.py` | Python package |
-| `nutrition_demo/models.py` | Nutrients、Result、Preview 與輸入型別 |
-| `nutrition_demo/store.py` | SQLite schema、交易、版本與操作去重 |
-| `nutrition_demo/nutrition.py` | 四項營養、份量與成本換算 |
-| `nutrition_demo/catalog.py` | 固定食材／食譜資料驗證、建議與補充食物選項 |
-| `nutrition_demo/service.py` | 設定、庫存、完成備餐、食用、更正與查詢 |
-| `nutrition_demo/agent.py` | 自然語言互動與受限工具介面 |
-| `nutrition_demo/__main__.py` | 互動 CLI、確認輸入、資料庫與模型選項 |
-| `demo_data/catalog.json` | 少量附來源的食材、食譜與補充食物資料 |
-| `demo_data/scenario.json` | 明確標示為合成的可重跑測試情境 |
-| `tests/test_demo_*.py` | 各階段的狀態與互動回歸測試 |
-| `pyproject.toml`、`uv.lock`、`.python-version` | 專案依賴、鎖定版本與 Python 選擇 |
-| `.env.example`、`README.md` | 設定欄位範例、環境與資料庫操作說明 |
+| `Dockerfile`、`compose.yaml`、`.dockerignore` | app、db、db_test、鎖定環境與持久化 volume |
+| `pyproject.toml`、`uv.lock`、`.python-version` | Python 3.12、依賴與鎖定版本 |
+| `.env.example` | 模型及本機資料庫設定欄位 |
+| `nutrition_demo/models.py` | Nutrients、Result、Preview、BatchOutput 等型別 |
+| `nutrition_demo/store.py` | PostgreSQL 連線、交易、migrations、去重、狀態版本 |
+| `nutrition_demo/migrations/001_initial.sql` | 初始 schema、約束及索引 |
+| `nutrition_demo/nutrition.py` | 營養、成本、分配與容差檢查 |
+| `nutrition_demo/catalog.py` | 四份基礎食譜與固定資料載入、候選及補充食物建議 |
+| `nutrition_demo/service.py` | 個人設定、庫存、烹調成品、加餐、食用、更正及查詢 |
+| `nutrition_demo/workflow.py` | 主流程、階段進度與等待使用者的狀態 |
+| `nutrition_demo/agent.py` | Responses API、受限工具迴圈及客製化迭代 |
+| `nutrition_demo/__init__.py`、`nutrition_demo/__main__.py` | package 與 CLI |
+| `demo_data/catalog.json`、`demo_data/source_manifest.json` | 結構化食譜及可追溯來源 |
+| `demo_data/scenario.json` | 獨立且清楚標示的合成情境 |
+| `tests/test_demo_*.py`、`tests/conftest.py` | 計算、資料庫、互動與完整情境測試 |
+| `README.md` | 啟動、初始化、seed、重開、備份、測試與目前狀態 |
 
-執行入口規劃為 `uv run python -m nutrition_demo --db data/demo.sqlite3`。`--seed demo_data/scenario.json` 僅載入尚無商業資料的資料庫。已有個人設定、庫存、批次或事件時明確拒絕 seed，重新示範採另一個檔案。`--scripted` 提供可重跑的工具流程驗證，明確標示為 scripted。一般模式採真正模型工具互動。
+## 環境、設定與啟動契約
 
-## 資料與共用介面
+以下命令為實作完成後的驗收入口，Docker engine、環境設定與對應程式需先可用。所有命令從 repo 根目錄執行。
 
-以下均為規劃中的介面，數值使用 Decimal，金額以 USD 保存，顯示時才四捨五入。
+### 容器環境
 
-- `Nutrients(kcal: Decimal, protein_g: Decimal, carbs_g: Decimal, fat_g: Decimal)`，四項都要明確提供。
-- `Result(ok: bool, data: dict, error: str | None)`，失敗結果回到互動層，不中斷整段 session。
-- `Preview(id: str, kind: str, state_version: int, changes: list[dict], summary: str)`，確認必須綁定具體預覽與版本。
-- `Store(path: Path)`，`initialize() -> None`、`close() -> None`、`transaction()` 以單一 SQLite transaction 管理一個操作。
-- `NutritionService(store: Store, catalog: Catalog, timezone: str)`，所有寫入透過此服務。
-- `request_id` 代表應用程式的一次操作，重試沿用原 ID。再次輸入相同文字有新的 ID。
+- `app` 使用 Python 3.12 slim，容器內以 uv 安裝 lockfile 中的 `openai`、`psycopg[binary]` 與測試依賴 pytest。預設工作目錄 `/app`，ENTRYPOINT 為 `uv run --locked python -m nutrition_demo`。
+- `db` 採 PostgreSQL 18。named volume 掛載 `/var/lib/postgresql`，對應 18 的版本化 PGDATA 目錄。實作時記錄已驗證的 minor version 與映像 digest，app、uv 映像也鎖定已驗證版本。
+- `db` 以 pg_isready 檢查健康，app 依賴 service_healthy。重建 app 與一般停止／啟動沿用既有 volume。
+- `db_test` 採同版 PostgreSQL、獨立資料與測試 profile，`TEST_DATABASE_URL` 指向它。測試與 seed 不能自動回退到日常資料庫。
+- `.env.example` 提供 POSTGRES_USER、POSTGRES_PASSWORD、POSTGRES_DB、DATABASE_URL、TEST_DATABASE_URL、OPENAI_API_KEY、OPENAI_MODEL 與選用 OPENAI_BASE_URL。`OPENAI_MODEL` 範例預設 gpt-6-luna。
+- 容器內資料庫主機為 db，測試為 db_test。`.env` 經 Compose env_file 傳入 app，credentials 只留本機，建置 context 排除 `.env` 與私有執行資料。
+- Dockerfile 內建立 Python 環境，host 可用 uv 產生／更新 lockfile。一般使用入口為 Compose。
 
-資料表包含 profile、inventory、batches、batch_ingredients、events、previews、operations 與 state_meta。`events` 保存 date、meal、batch_id、boxes 與食用時的每盒營養快照。剩餘盒數由批次成品盒數減事件盒數推導，每日營養由事件推導。每批保存成品營養、實際用量、成本、來源與估算標示。profile 分別保存每餐與每日目標，缺少任一目標時詢問使用者，不推測每日目標等於每餐乘三。
-
-## 環境與資料庫設定的驗收基準
-
-2026-11-17 已確認本機可使用 uv 0.13.6，系統 `python3` 為 3.9.6。以下為實作階段要執行的步驟，目前尚未建立專案 `.venv`、依賴或資料庫。所有命令從 `/Users/wolverine/Develop/nutrition-agent` 執行。
-
-### 環境初始化
-
-首次建立環境採以下順序，Task 0 完成後才執行產品程式。`uv init` 僅在尚無 `pyproject.toml` 時執行。
+### 首次啟動及資料庫
 
 ```bash
-cd /Users/wolverine/Develop/nutrition-agent
-uv python install 3.12
-uv init --bare --no-package --no-workspace --python 3.12 --name nutrition-agent
-uv python pin 3.12
-uv add openai
-uv add --dev pytest
-uv sync --locked
-uv run python --version
-uv run python -c 'import sqlite3, openai, pytest; print(sqlite3.sqlite_version)'
+cp -n .env.example .env
+docker compose build app
+docker compose up -d --wait db
+docker compose run --rm app --init-db
+docker compose run --rm app --db-info
+docker compose run --rm app
 ```
 
-預期 Python 為 3.12.x，三個模組均可匯入，輸出 SQLite 版本。建立的 `pyproject.toml`、`uv.lock` 與 `.python-version` 納入版本控制，`.venv/` 由 `.gitignore` 排除。日後其他電腦取得 repo 後，使用 `uv sync --locked` 重建環境，依 `.python-version` 選擇 Python。
-
-本機環境不需要手動啟用 `.venv`，啟動與測試統一使用 `uv run`。首次建立時記錄實際 Python、uv 與模型 client 版本，後續執行保留 lockfile。
-
-### 模型設定與離線操作
-
-Task 0 建立 `.env.example`，包含 `OPENAI_API_KEY=` 與 `OPENAI_MODEL=`。使用者複製成 `.env` 後自行填入可使用的 key 與模型 ID。若課程提供相容服務，也可選填 `OPENAI_BASE_URL`。模型名稱於確認權限後設定，實驗時記錄確切模型與解碼參數。
+使用者先在本機設定 `.env`。`--init-db` 執行版本化 migrations，重複執行不改變既有商業資料。一般啟動只檢查 schema 與連線，缺 migration 時提供執行入口。`--db-info` 顯示不含密碼的資料庫識別、schema version 與表筆數。
 
 ```bash
-cp .env.example .env
+docker compose run --rm app --model gpt-6-luna
+docker compose run --rm app --seed demo_data/scenario.json --scripted
+docker compose --profile test up -d --wait db_test
+docker compose --profile test run --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/ -q
+docker compose down
+docker compose up -d --wait db
 ```
 
-一般對話入口使用 `uv run --env-file .env python -m nutrition_demo --db data/demo.sqlite3`。CLI 在初始化真正模型 client 前檢查 key 與模型，缺資料時提供設定指引。設定值不輸出至紀錄。
+Seed 先確認目標 schema 的商業資料為空，整筆匯入放在單一交易，非空即拒絕。範例 scripted 命令僅適用空的示範環境，重跑示範以不同 Compose project 與獨立 volume 執行，例如 `docker compose -p nutrition-demo-check ...`。一般 down 不加刪除 volume 的參數。
 
-初始化資料庫、查詢資料庫資訊、scripted 示範與本機單元測試可獨立於模型憑證執行。`.env` 與本機資料庫依目前 ignore 規則排除於 Git。
+測試以 TEST_DATABASE_URL 連線 db_test，fixture 強制檢查測試目標，對每個需要資料庫的 case 建立唯一 schema、載入相同 migrations，finally 清理該 schema。所有測試查詢使用一致 search_path，查表時限定該 schema。測試 profile 的 app 透過 --no-deps 避免連帶啟動日常 db。
 
-### 資料庫建立與重開
+備份文件提供以 pg_dump 輸出指定檔案及在獨立示範環境用 pg_restore 還原的操作，驗收時核對設定、庫存、批次與事件筆數。更換 PostgreSQL major version 需獨立升級流程。
 
-SQLite 資料庫由 Python 的 sqlite3 模組操作。Task 1 實作以下 CLI 選項，這些命令在 Task 1 完成前屬於規劃中的入口。
+### 模型與執行上限
 
-```bash
-uv run python -m nutrition_demo --db data/demo.sqlite3 --init-db
-uv run python -m nutrition_demo --db data/demo.sqlite3 --db-info
-uv run python -m nutrition_demo --db data/demo.sqlite3 --seed demo_data/scenario.json --scripted
-uv run --env-file .env python -m nutrition_demo --db data/demo.sqlite3
-```
+採 Responses API，支援查詢、提出方案、計算與一般食用工具。確認／拒絕由應用程式接收並綁定具體 preview，模型或工具文字不能自行核准。離線初始化、seed、scripted 及假模型測試可在沒有 OpenAI key 時執行。
 
-- `--init-db` 建立父目錄、資料庫與 schema version 1，完成後退出。重複執行只檢查版本並保留既有資料。
-- `--db-info` 採唯讀連線，顯示資料庫絕對路徑、schema version 與各表筆數。不存在時報錯，不建立空檔案。
-- `--seed` 在單一交易驗證並載入固定初始資料，失敗時回復。已有商業資料時拒絕，避免重複匯入。
-- 一般啟動呼叫相同 `Store.initialize()`，新資料庫自動建立。既有版本 1 直接讀取，較新或未知版本顯示明確錯誤，等待相容處理。
-- 重新示範指定新的資料庫路徑，例如 `data/demo-second.sqlite3`。日常使用固定同一個路徑。
-- schema 結構與 seed 檔納入版本控制，實際使用者資料留在本機。
+模型依 CLI、環境、預設的優先順序決定。gpt-6-luna 的初始 reasoning effort 建議 medium，切換模型時檢查該模型接受的參數。正式評估凍結確切模型 ID、SDK、參數與工具版本。模型無權限或不相容時回報明確錯誤，由使用者選擇另一個設定。
 
-### 表格與資料完整性
+技術初始值建議為每次客製化最多三個提案／驗算輪次，每回合最多 12 次模型呼叫、24 次工具呼叫及三輪澄清。這些為助理選定的開發預設，由 development cases 試跑後定稿，正式比較時所有 controller 一致。等待使用者不持有資料庫交易。
 
-| 表 | 最小資料內容與約束 |
-|---|---|
-| `profile` | 單一使用者設定、時區、每餐與每日四項目標、鍋具與餐盒資料。 |
-| `inventory` | 食材 ID、剩餘數量、單位、生熟狀態、營養基準、來源與估算標示、價格與計價基準。 |
-| `batches` | 批次 ID、食譜 ID、名稱、製作日期、實際整數盒數、整批與每盒營養快照、成本與來源。 |
-| `batch_ingredients` | 批次與食材外鍵、實際用量及營養／成本來源快照。 |
-| `events` | 事件 ID、批次外鍵、當地食用日期、餐別、一整盒及食用營養快照。 |
-| `previews` | 預覽 ID、類型、狀態版本、完整變更、狀態及確認時間。 |
-| `operations` | 唯一 request_id、輸入摘要、結果、確認／預覽關聯、前後變更與時間。相同 ID 搭配不同輸入時拒絕。 |
-| `state_meta` | 單一狀態版本，用於檢查預覽是否過期。schema version 使用 `PRAGMA user_version`。 |
+## 資料模型與操作一致性
 
-每個資料庫連線在交易開始前啟用並確認 `PRAGMA foreign_keys = ON`，外鍵關聯採限制刪除。事件按日期、批次建立查詢索引。Decimal 使用精確字串保存，服務層驗證單位、非負值、有限值及盒數有效性。
+- `schema_migrations` 保存已套用 migration 與 checksum。
+- `profile` 保存單人設定、當地時區、每餐與每日目標、廚具及餐盒容量。缺每日目標時詢問，不將每餐目標自行乘三。
+- `inventory` 保存食材、單位、生熟狀態、數量、營養來源與價格基準，數量非負。
+- `cooking_runs` 保存一次已確認烹調、食譜版本、日期與 request_id；`cooking_ingredients` 保存該次實際總用量、來源及營養／成本快照。
+- `batches` 連結 cooking_run，每種組成一批，保存名稱、整數盒數、組成、盒內營養與成本快照。`batch_ingredients` 保存該批的食材分配，作為營養與成本計算依據。
+- `batch_addons` 保存批次確認過的加餐與每餐用量、版本。`events` 保存批次、當地日期、餐別、一盒，以及實際吃下的盒內與加餐營養快照。
+- `inventory_movements` 將食材增減連結到 cooking_run、食用事件或明確校正。`previews` 保存操作內容、版本、狀態及確認時間。`operations` 保存唯一 request_id、輸入摘要及結果。`workflow_sessions` 保存階段與待澄清內容。
+- `state_meta` 保存單人狀態版本。寫交易先鎖定該列，再查 operations。已完成的相同 request_id 同輸入先回傳原結果，不重新驗證已完成 preview 的版本；同 ID 不同輸入拒絕。只有新操作才驗證 preview 與庫存，再一起提交異動及新版本。
+- 數值用 PostgreSQL NUMERIC 與 Python Decimal，日期用 DATE，時間用 TIMESTAMPTZ，來源與快照結構可用 JSONB。所有庫存、盒數、數值有限性與外鍵由程式及資料庫約束共同檢查。
+- 所有已確認寫入透過共用服務與參數化 SQL。交易失敗回復全部變更，連線中斷而結果不明時以同一 request_id 查詢／重試。
 
-單次庫存更新、完成備餐或更正採明確交易邊界，成功一起提交，失敗一起回復。確認檢查、版本檢查、操作去重與寫入位於同一交易。交易方式統一由 Store 管理，使用 `sqlite3.connect(path, isolation_level=None)` 並明確執行 BEGIN IMMEDIATE／COMMIT／ROLLBACK。schema 初始化逐條執行 SQL，與設定 schema version 保持同一交易。資料庫忙碌或遭鎖定時回報可重試錯誤，重試沿用相同 request_id。
+同次烹調的成品分配必須能核對總食材、營養與成本。每筆分配包含 cooking_ingredient_id、quantity、unit，quantity 代表該成品批次的總量。同一批對同一原料只保留一筆，跨批可合法分配。同一原料所有成品分配量加上已確認剩料／耗損，必須等於本次實際用量，並使用相同或已驗證可換算的單位。超額、少分、重複項與單位不符皆需修正後才能確認。每批只使用獲分配的份量計算營養與成本，剩料或耗損另列於 cooking_run 並清楚標估算。庫存消耗以 cooking_run 的總用量為準，多批輸出共用這筆消耗。
 
-### 設定來源
+同一批次的加餐方案日後改變時，新事件採當時確認的方案，既有事件保留原快照。更正既有事件時，先使用原快照算恢復量，再套用本次確認的批次與加餐。只改日期不改盒數與總食材消耗。
 
-- [uv 專案建立](https://docs.astral.sh/uv/concepts/projects/init/)
-- [uv lock 與 sync](https://docs.astral.sh/uv/concepts/projects/sync/)
-- [Python 3.12 sqlite3](https://docs.python.org/3.12/library/sqlite3.html)
-- [SQLite 外鍵設定](https://www.sqlite.org/foreignkeys.html)
+## 共用介面
 
-## Task 0 — 建立可重現的 Python 環境
+以下為規劃介面，dataclass 的欄位與 JSON schema 需一致。所有 ID 為字串，金額以 USD 記錄。
 
-**Files** — `pyproject.toml`、`uv.lock`、`.python-version`、`.env.example`、`README.md`，必要時調整 `.gitignore`。
+- `Nutrients(kcal: Decimal, protein_g: Decimal, carbs_g: Decimal, fat_g: Decimal)`。
+- `IngredientAllocation(cooking_ingredient_id: str, quantity: Decimal, unit: str)`；`BatchOutput(name: str, boxes: int, allocations: list[IngredientAllocation])`。confirmed_dispositions 以相同原料、數量與單位另列 remaining／loss 類型，與各批分配共同通過守恆驗證。
+- `Result(ok: bool, data: dict, error: str | None)`；`Preview(id: str, kind: str, state_version: int, changes: list[dict], summary: str)`。
+- `Store(dsn: str, schema: str = "public")`，`migrate() -> None`、`info() -> dict`、`transaction()`、`close() -> None`。
+- `NutritionService(store: Store, catalog: Catalog, timezone: str, clock: Callable)`，公開操作皆回傳 Result。
+- `get_profile()`、`set_profile(values: dict)`、`list_inventory()`。
+- `preview_inventory_change(items: list[dict], mode: str)`，mode 為 purchase 或 reconcile。
+- `preview_preparation(recipe_id: str, actual_usage: list[dict], outputs: list[BatchOutput], prepared_on: str, confirmed_dispositions: list[dict] | None = None)`。disposition 缺省為空清單，所有實際用量需完全分配。
+- `preview_batch_addons(batch_id: str, items: list[dict])`、`confirm_preview(preview_id: str, request_id: str)`、`reject_preview(preview_id: str)`。
+- `find_batches(query: str)`、`find_events(query: dict)`、`log_meal(batch_id: str, eaten_on: str, meal: str | None, request_id: str, addon_override: list[dict] | None = None)`。None 沿用確認加餐，空 list 代表本餐不加餐。
+- `preview_correction(event_id: str, changes: dict)`，changes 支援 date、meal、batch_id、addon_override。庫存校正與待記食用可經 `preview_reconciled_meal(items: list[dict], meal_input: dict)` 合併確認及提交。
+- `daily_summary(day: str)`、`batch_summary()`。每日 summary 為已記錄備餐攝取，列盒內與實際加餐，並比較個人目標。
+- `Workflow(service: NutritionService)` 保存每個 session 的階段；`DemoAgent(service, workflow, client, settings)` 的 `handle(message: str) -> Result` 使用同一組工具。
 
-**Interfaces** — 後續任務使用 `uv run python`，測試使用 `uv run python -m pytest`。CLI 接收 OPENAI_API_KEY、OPENAI_MODEL 及選用的 OPENAI_BASE_URL。
+## Task 0 — Docker、Python 與資料庫服務
 
-- [ ] 確認 repository instructions 與 Git 狀態，按照環境初始化節建立 Python 3.12 與依賴。
-- [ ] 建立 `.env.example` 及 README 設定說明。所有實際 credentials 由使用者在本機提供。
-- [ ] 執行上述版本與匯入檢查，確認 `.venv` 位於本 repo，保留實際結果。
-- [ ] 執行 `uv sync --locked` 確認 lockfile 可重建環境，檢查 `.venv`、`.env` 與資料庫 ignore 規則。
-- [ ] 將環境設定與操作文件作為獨立 commit，接著執行 Task 1。
+**Files** — Dockerfile、compose.yaml、.dockerignore、pyproject.toml、uv.lock、.python-version、.env.example、README.md。
 
-## Task 1 — 持久化資料與可重開的入口
+**Interfaces** — app ENTRYPOINT 及 DATABASE_URL／TEST_DATABASE_URL；db 健康後可接受連線。此任務完成時先用 --entrypoint 覆寫檢查環境。
 
-**Files** — `models.py`、`store.py`、`__main__.py`、`__init__.py`、`tests/test_demo_store.py`。
+- [ ] 檢查 Git 狀態、repository instructions、docker version、docker compose version 與 Docker engine。若 CLI 或 engine 缺失，診斷實際安裝狀況後處理可恢復設定；需要使用者安裝／啟動時給出明確步驟。
+- [ ] 建立鎖定依賴與容器定義。首次以可用 uv 產生 lockfile，Docker build 使用 uv sync --locked，記錄映像 digest 與實際 Python／套件版本。
+- [ ] 驗證 Compose config、db healthcheck、app 的 openai／psycopg／pytest 匯入與 Python 3.12。使用覆寫入口驗證 DATABASE_URL 可連線且 SELECT 1 成功。
+- [ ] 啟動 db_test 並檢查測試資料獨立性。驗證 secrets 與個人資料排除於 build context 及 Git。
+- [ ] 檢查差異後提交環境設定，Task 1 接著建立 schema 與正式 CLI。
 
-**Interfaces** — 產出共用資料型別、Store 及 `uv run python -m nutrition_demo` 入口。
+## Task 1 — PostgreSQL schema、交易與重開
 
-- [ ] 確認 Task 0 的環境與依賴檢查已通過，從環境與資料庫設定節實作 Store 和 CLI 的初始化契約。
-- [ ] 加入 `test_profile_survives_reopen`，寫入目標後關閉再開啟資料庫，四項目標與廚具資料完全相同。加入 seed 遇非空庫會拒絕、重複初始化保留資料、唯讀 db-info 不建立新檔、未知 schema version 拒絕、外鍵有效與 seed 失敗回復的測試。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_store.py -q`，確認因尚未提供介面而失敗。
-- [ ] 依資料庫設定節實作八張表、schema version、外鍵、索引、交易、--init-db、--db-info 與 seed 邏輯。離線入口可在未提供模型憑證時執行。
-- [ ] 重跑該測試，再以兩次啟動確認同一檔案可讀取設定。檢查差異後將本任務檔案作為獨立 commit。
+**Files** — models.py、store.py、migrations/001_initial.sql、__init__.py、__main__.py、tests/conftest.py、tests/test_demo_store.py。
 
-## Task 2 — 營養、成本與固定食譜資料
+**Interfaces** — Store、共用型別、--init-db、--db-info、--seed 與 CLI 離線分支。
 
-**Files** — `nutrition.py`、`catalog.py`、`demo_data/catalog.json`、`demo_data/scenario.json`、`tests/test_demo_nutrition.py`。
+- [ ] 加入 test_profile_survives_reopen、test_migrations_repeat_safely、test_unknown_schema_version、test_foreign_keys、test_seed_rejects_nonempty 與 test_seed_failure_rolls_back。固定檢查目標 schema 的設定、來源及筆數。
+- [ ] 透過 Compose 測試入口執行測試，確認尚未提供介面而失敗。
+- [ ] 實作上述 PostgreSQL 表、約束、migration runner、單人狀態列鎖與 request_id 去重。設定 schema 的識別字使用 psycopg.sql 安全組合，查詢限制於該 schema。
+- [ ] 實作初始化、檢查、seed 與 CLI，讀寫 schema_migrations 在同一 migration 交易內。seed 對相同 schema 取得狀態鎖後才檢查是否為空。
+- [ ] 執行 tests/test_demo_store.py，核對重開與重複初始化保留資料，再提交本任務。
 
-**Interfaces** — `scale_nutrients(value: Nutrients, used: Decimal, reference: Decimal) -> Nutrients`、`per_box(total: Nutrients, boxes: int) -> Nutrients`、`used_cost(package_price: Decimal, used: Decimal, package_quantity: Decimal) -> Decimal`。`Catalog.load(path: Path) -> Catalog`、`recommend(inventory: list[dict], profile: dict, meals: int = 6) -> list[dict]`、`suggest_additions(actual: Nutrients, target: Nutrients) -> list[dict]`。
+## Task 2 — 四道食譜、營養與客製化驗算
 
-- [ ] 寫入已知數字測試。合成整批營養為 3600 kcal、240 g 蛋白質、390 g 碳水與 120 g 脂肪，八盒結果為 450、30、48.75、15。12 USD／1000 g 用 250 g 的成本為 3 USD。
-- [ ] 加入零盒／負數／非有限值、缺任一營養欄位、生熟狀態不符與無密度資料的 g／ml 轉換拒絕測試。執行測試確認失敗。
-- [ ] 實作計算與驗證。資料保存基準重量、生熟狀態、來源、來源日期、估算標示與價格基準。合成情境和真實來源資料分別標示。
-- [ ] 準備少量食譜，包含用量、完整步驟、困難操作、鍋具條件與分批方式。候選比較顯示現有／需買食材、營養差距與成本，使用者選定後才形成備餐計畫。產生需買數量清單，固定資料有可核對的商品連結時一併提供，標示查核日期。
-- [ ] 補充食物建議列出對四項目標的影響。無法兼顧時說明差距，不能宣稱精確達標。建議本身不計入已食用營養。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_nutrition.py -q` 通過，核對來源與數字後提交本任務。
+**Files** — nutrition.py、catalog.py、demo_data/catalog.json、demo_data/source_manifest.json、tests/test_demo_nutrition.py。
 
-## Task 3 — 庫存與完成備餐的確認交易
+**Interfaces** — `scale_nutrients(value, used, reference) -> Nutrients`、`per_box(total, boxes) -> Nutrients`、`used_cost(price, used, package_quantity) -> Decimal`、`validate_targets(actual, targets) -> dict`；Catalog.load、recommend、suggest_additions。
 
-**Files** — `service.py`、`store.py`、`tests/test_demo_preparation.py`。
+- [ ] 建立合成數字測試，整批 3600 kcal、240 g 蛋白質、390 g 碳水與 120 g 脂肪，八盒各為 450、30、48.75、15。12 USD／1000 g 用 250 g 成本為 3 USD。
+- [ ] 測試含邊界的容差。假設目標 600／40／65／20，通過範圍為 570–630／40–44／58.5–71.5／18–22。任一超出即未達標，計算以 Decimal 完整值判斷，顯示時才四捨五入。
+- [ ] 加入缺營養欄位、零盒／負數／非有限值、生熟或單位不符、無密度資料 g↔ml 換算與未知成本測試，確認先失敗。
+- [ ] 由四份 PDF 抽取食譜與步驟，核對營養來源、價格與份量版本，將已核對／估算／缺漏明確標示。來源 manifest 包含原路徑、hash、頁碼、品牌或 USDA ID。
+- [ ] 實作候選料理、困難步驟、廚具／分批資訊、需買清單與成本估算；客製化提案驗算時回傳四項差距及替換影響，支援後續模型迭代。
+- [ ] 補充建議顯示盒內加加餐的整餐營養，檢查四項限制並保留未達標的差距。僅提供建議不新增攝取。
+- [ ] 執行 tests/test_demo_nutrition.py 通過，人工核對四份來源抽取與來源標示，再提交。
 
-**Interfaces** — `get_profile() -> Result`、`set_profile(values: dict) -> Result`、`list_inventory() -> Result`、`preview_inventory_change(items: list[dict], mode: str) -> Result`、`preview_preparation(recipe_id: str, actual_usage: list[dict], boxes: int, prepared_on: str) -> Result`、`confirm_preview(preview_id: str, request_id: str) -> Result`。mode 為 `purchase` 或 `reconcile`。
+## Task 3 — 庫存、同次烹調多批成品與加餐方案
 
-- [ ] 寫入測試，預覽不寫商業資料，拒絕不更新。確認後一次扣除實際用量並建立八盒批次。相同 request_id 重試只生效一次。
-- [ ] 加入庫存不足拒絕與插入批次失敗時庫存回復的測試，執行確認失敗。
-- [ ] 實作 profile／庫存讀寫、文字購入資訊確認、庫存校正及完成備餐交易。新增購入使用已確認價格，成本資料不齊時顯示未完整估算。
-- [ ] 以一次交易保存用量、營養／成本快照與盒數。回傳資料包含每盒營養、均分假設及補充建議。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_preparation.py -q`，通過後提交本任務。
+**Files** — service.py、store.py、tests/test_demo_preparation.py。
 
-## Task 4 — 整盒食用與每日／批次查詢
+**Interfaces** — 個人設定、inventory previews、preview_preparation、preview_batch_addons、confirm_preview。
 
-**Files** — `service.py`、`tests/test_demo_meals.py`。
+- [ ] 測試日式咖哩的完整便當六盒與純咖哩一盒建立為兩批。實際食材只扣一遍，兩批的營養與成本按各自組成分配。
+- [ ] 測試 BBQ Mac & Cheese 的含菜五盒與無菜兩盒，分配總量對應 cooking_run。測試各原料成品分配與確認剩料／耗損的合計等於實際用量，超額、少分、同批重複原料與單位不符時拒絕。
+- [ ] 測試預覽不寫商業資料、拒絕保留原狀、庫存不足與中途插入失敗全部回復、重複 request_id 不重複消耗，以及兩個同時確認只有一個可使用原版本。
+- [ ] 執行測試確認失敗，實作 purchase／reconcile、單次烹調與多批建立的原子操作。保存每批營養來源與成本快照。
+- [ ] 實作加餐方案確認及版本保存，測試確認加餐方案不扣食材、不新增飲食紀錄。
+- [ ] 執行 tests/test_demo_preparation.py 通過，提交本任務。
 
-**Interfaces** — `find_batches(query: str) -> Result`、`log_meal(batch_id: str, eaten_on: str, meal: str | None, request_id: str) -> Result`、`daily_summary(day: str) -> Result`、`batch_summary() -> Result`。
+## Task 4 — 一盒加餐的食用與查詢
 
-- [ ] 寫入八盒中吃一盒的測試，剩七盒，該日加入 450 kcal、30 g 蛋白質、48.75 g 碳水、15 g 脂肪。加入零庫存拒絕及同一 request_id 重試不重複的測試。
-- [ ] 執行測試確認失敗，再實作直接記錄一盒與查詢。日期由 America/Los_Angeles 的明確時鐘解析。
-- [ ] 加入「昨日」跨午夜解析與兩批同名需回傳候選的測試。單靠相同文字或份量不能自行合併事件。
-- [ ] 查詢標為已記錄備餐營養，顯示四項每日目標差距與各批剩餘盒數；此版可查詢的攝取來自已支援的備餐紀錄。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_meals.py -q`，通過後提交本任務。
+**Files** — service.py、workflow.py、tests/test_demo_meals.py。
 
-## Task 5 — 更正預覽、核准與一致性
+**Interfaces** — find_batches、log_meal、preview_reconciled_meal、daily_summary、batch_summary。
 
-**Files** — `service.py`、`store.py`、`tests/test_demo_corrections.py`。
+- [ ] 測試一盒預設搭配一份優格時，盒數減一、優格庫存減一、日營養為兩者合計，保存實際組成。測試 addon_override 空 list 時只記盒內。
+- [ ] 測試方案之後改變不回寫原事件；重試不重複扣除，零盒拒絕，多個同名候選先澄清。
+- [ ] 測試加餐不足時回傳待釐清狀態，食用與庫存均尚未寫入；經確認的補採買／庫存校正與食用一起提交，中途失敗全部回復。
+- [ ] 執行測試確認失敗，實作食用交易與等待澄清狀態。固定 America/Los_Angeles 時區，clock 可注入以測試跨午夜的昨日解析。
+- [ ] 查詢顯示已記錄備餐的四項營養、目標差距、剩餘盒數、每盒及預設整餐營養。
+- [ ] 執行 tests/test_demo_meals.py 通過，提交。
 
-**Interfaces** — `find_events(query: dict) -> Result`、`preview_correction(event_id: str, changes: dict) -> Result`、`reject_preview(preview_id: str) -> Result`。確認沿用 Task 3 的 `confirm_preview`。本版 changes 限 date、meal、batch_id。
+## Task 5 — 日期、批次與加餐更正
 
-- [ ] 寫入日期更正測試，今天的一盒移到昨天後，今天扣除相同營養、昨天加入、批次仍剩七盒，事件 ID 保持相同。
-- [ ] 加入批次更正測試，來源批次恢復一盒、目的批次扣一盒，當日營養切換為目的批次值。目的無剩餘盒時拒絕並保持全部原狀。
-- [ ] 加入拒絕、過期預覽、核准 ID 不相符、重複確認以及原紀錄已正確的測試。無變更時直接說明，無需核准。
-- [ ] 執行測試確認失敗，實作版本檢查、由應用程式接收的確認及原子更正。更新事件營養快照與記錄異動。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_corrections.py -q`，通過後提交本任務。
+**Files** — service.py、store.py、tests/test_demo_corrections.py。
 
-## Task 6 — 自然語言助理與確認互動
+**Interfaces** — find_events、preview_correction、reject_preview、confirm_preview。
 
-**Files** — `agent.py`、`__main__.py`、`tests/test_demo_agent.py`。
+- [ ] 測試日期更正移動盒內加加餐的日營養，批次剩餘與食材總消耗相同，事件 ID 保持。
+- [ ] 測試更正批次恢復來源盒數並扣正確批次，預覽清楚列出將採用的餐點與加餐、營養及庫存差額；使用者確認後一起更新。
+- [ ] 測試本餐沒吃加餐的更正會恢復原扣除食材並減去對應營養，未知新搭配或不足庫存先釐清。
+- [ ] 加入拒絕、過期 preview、無權核准、重複確認、無變更、連線失敗後同 request_id 重試等測試。另測試已提交但回覆遺失、其他操作成功後，再重試原 request_id 仍回傳原成功結果，確認先失敗。
+- [ ] 實作狀態版本、應用程式確認與單交易更正。校正依事件快照計算，不用今天的方案回推歷史。
+- [ ] 執行 tests/test_demo_corrections.py 通過，提交。
 
-**Interfaces** — `DemoAgent(service: NutritionService, client: object, model: str, max_tool_calls: int = 24)`、`handle(message: str) -> Result`。CLI 將明確的確認／拒絕輸入送至服務層，模型工具集包含查詢與建立預覽，核准動作由應用程式處理。
+## Task 6 — 主流程與階段內工具迴圈
 
-- [ ] 以假模型回覆測試工具選擇與觀察回傳。涵蓋讀取設定、食譜選擇、完成備餐、食用、歧義澄清與更正。
-- [ ] 加入模型提供非法參數、呼叫未知工具、達工具上限、API 失敗與將工具文字當成核准的測試，確認無未核准寫入且 session 可恢復。
-- [ ] 實作工具 loop，context 僅包含個人資料、catalog 與服務查詢結果。API 失敗不切換成偽造成功，scripted 模式明確顯示用途。
-- [ ] 啟動時沿用目標，規劃時列出庫存待確認，候選說明難點與成本。基本烹調問答以選定食譜與廚具為依據。
-- [ ] 資訊明確的食用直接執行。缺失批次、日期或事件身分會改變結果時先詢問。所有完成回覆依工具成功結果產生。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_agent.py -q`，通過後提交本任務。
+**Files** — workflow.py、agent.py、__main__.py、tests/test_demo_agent.py。
 
-## Task 7 — 代表情境與共用工具驗證
+**Interfaces** — Workflow、DemoAgent.handle、共用服務工具 schemas 與模型設定。
 
-**Files** — `tests/test_demo_scenario.py`、`README.md`，必要時新增 `demo_data` 中的具來源說明資料。
+- [ ] 假模型測試先選料理再客製化、用量／小幅替換、計算失敗重提、四項符合後請確認、達重試上限等待決定。
+- [ ] 測試保存階段進度與待澄清問題，重開可以查詢或接續；一般食用、查詢、更正直接路由至對應階段。
+- [ ] 測試 --model 優先、環境覆寫預設、實際模型與參數追蹤，以及不同模型不相容參數會明確報錯。
+- [ ] 加入未知工具、非法參數、超過呼叫上限、API 失敗、工具文字偽裝核准與未通過驗算就宣稱符合的回歸測試，先確認失敗。
+- [ ] 實作 Responses API loop 與可驗證的結果呈現。主流程及核准狀態由應用程式管理，完成訊息以成功工具結果為依據。
+- [ ] 對話可調整食譜與解釋基本步驟，使用選定配方、已知廚具與已核對資料。固定值與來源送入 context，評分答案由 evaluator 持有。
+- [ ] 執行 tests/test_demo_agent.py 通過，提交。
 
-**Interfaces** — 沿用 Tasks 1–6 的公開服務及 CLI。此任務不新增第二套商業邏輯。
+## Task 7 — 完整情境、持久化及備份驗證
 
-- [ ] 建立六餐計畫、實際八盒、吃一盒、日期更正、重新開啟仍有七盒的端到端情境。再驗證兩批同名澄清與改批次。
-- [ ] 執行 `uv run python -m pytest tests/test_demo_*.py -q`，確認持久化、庫存、四項營養、成本、核准與更正的關鍵斷言。
-- [ ] 在獨立示範資料庫執行 `uv run python -m nutrition_demo --db /tmp/nutrition-demo-check.sqlite3 --seed demo_data/scenario.json --scripted`，確認輸出與已知結果一致。
-- [ ] 用同一服務建立兩個獨立測試資料庫，載入相同 fixture 與固定時鐘，確認同一操作序列產生相同語意狀態。互動與後續評估都使用這組操作入口。
-- [ ] 以已設定的模型做一次自然語言 smoke test，確認真正工具互動可完成情境，記錄模型設定、工具步數與結果。若缺 API 憑證，明確保留此項未驗證狀態。
-- [ ] README 寫明啟動、設定、重開、重跑及來源／估算標示。確認 `.gitignore` 涵蓋本機資料庫與 credentials，檢查差異後提交本任務。
+**Files** — tests/test_demo_scenario.py、README.md、必要的合成情境。
 
-## Task 8 — 交付驗收與後續課程評估銜接
+- [ ] 驗證六餐計畫、實際八盒、確認加餐、吃一餐、改日期、重開後仍剩七盒，原料與加餐扣除均正確。
+- [ ] 驗證四份食譜載入、咖哩兩批與 BBQ 兩批成品、不重複扣原料，以及 Nikujaga 歷史六份與七份方案的區別。
+- [ ] 在 db_test 執行全部 demo 測試，同一 fixture 與 clock 在兩個隔離 schema 產生相同語意結果。固定 tool trace 與資料查核方式。
+- [ ] 使用獨立 Compose project 執行 scripted，明確標示合成情境；再以真正 gpt-6-luna 對話跑一輪並記錄實際用量與結果。模型權限或憑證缺失時保留該項未驗證狀態。
+- [ ] down／up 後讀回相同資料，使用 pg_dump 備份並在獨立環境還原，核對 schema、設定、庫存、批次與事件。
+- [ ] 更新 README 的已完成項目與限制，檢查檔案差異後提交。
 
-**Files** — 更新 `README.md` 中的示範驗收紀錄，視需要回填計畫核取方塊。
+## Task 8 — 驗收與課程銜接
 
-- [ ] 從新的空資料庫走一次正常入口，確認每個 V1 範圍項目都能對應到實際操作及已通過的檢查。
-- [ ] 關閉後重新啟動，確認目標、庫存、批次、食用紀錄與來源均保留。
-- [ ] 檢查正式模型與 scripted 模式的標示，以及未食用的補充建議不會增加已攝取總量。
-- [ ] 記錄實際已完成、尚未完成與限制。課程的 50 題、controller 比較、重跑與 failure analysis 另依作業要求驗證。
-- [ ] 記錄新 repo 的規格與核准規則版本，後續評估以該版本建立題目與 checker。舊 repo 的結果僅對應其原始系統。
+**Files** — README.md、本計畫的實際完成核取狀態。
+
+- [ ] 從新 clone 的設定流程走一次啟動、初始化、seed、互動、查詢及重開，每個 V1 功能可對應至操作與通過的檢查。
+- [ ] 核對 Docker／PostgreSQL、預設可切換模型、四項容差、確認範圍、加餐、庫存差異、分開批次與一次扣原料等所有確認決定。
+- [ ] 凍結 demo 設定與工具 schema，記錄模型、SDK、映像、規格及資料版本，列實際完成與未驗證事項。
+- [ ] 交付第一版 Python demo 的證據，課程評估依下列里程碑另行完成。
 
 ## 課程交付的後續里程碑
 
-以下根據老師講義列出課程交付所需的工作，不自動改變已確認的 Python V1 產品範圍。V1 能完成後，仍需完成下列項目，詳見 `docs/course-requirements.md`。
+產品第一版範圍與課程完整交付分別追蹤，講義要求見 `docs/course-requirements.md`。
 
-1. 建立新 repo 的 non-agentic baseline，與 Agent 共用工具、資料與規則。另明確定義至少兩種實驗方案。是否將 baseline 計入兩方案或另加 Agent variant，在實驗設計時明列。
-2. 使用共用服務建立可重設的 eval runner 與獨立 checker。Week 6 需 50 題、其中至少三題 edge cases 與兩題 unanswerable，完成三次 Agent 重跑、指標與 failure analysis。
-3. 擴充至至少 200 題 benchmark 與至少 50 題獨立 safety prompts，含 harmless prompts 的誤拒檢查。依實際能力與規則建題，題目與結果記錄版本。
-4. 為共用服務增加雲端互動網頁入口，提供公開 URL 並保留 follow-up context。Python V1 的服務與工具由網頁重用。
-5. 準備架構圖、三分鐘預錄 demo、兩分鐘現場 Q&A，以及最終 code、web app、report。
+1. 建立固定流程 baseline，與本 Agent 採相同工具、模型、資料、資源上限、使用者回覆與確認規則。固定流程由程式決定檢索及分支，Agent 可依觀察選擇階段內工具。實驗文件清楚列出比較方案；若需要額外 variant，另行定義其差異。
+2. 使用共用 Store／Service／Tools 建立 eval runner 與獨立 checker。每題用隔離 schema、固定時鐘與 scripted 回答，課程 50 題含至少三個 edge cases 與兩個 unanswerable，完成指標、三次重跑及 failure analysis。
+3. 擴充至少 200 題 benchmark 與至少 50 題安全測試，涵蓋來源注入、記憶污染、資料洩漏、危險／有害請求與 jailbreak，加入無害請求誤拒檢查。
+4. 為同一服務核心加上雲端網頁，公開展示使用獨立示範資料、保留 follow-up context，符合 11/24 展示要求。
+5. 準備實際架構圖、三分鐘預錄 demo、兩分鐘 Q&A，以及 12/8 code、web app、report。題數、期限與指標以 course-requirements 的原始來源對照為準。
 
-## 方案選擇與自我檢查
+## 技術預設、驗證邊界與來源
 
-Isaac 已選定獨立 repo，基礎程式依新規格建立。相較於直接擴充隊友的舊程式，此選擇讓產品需求、測試規則與工作責任具有清楚起點。共同核心供互動與評估使用，避免出現兩套更正邏輯。
+Isaac 已確認產品行為。下列為助理補齊的工程預設，可在 development cases 驗證後調整並留紀錄。
 
-環境建立對應 Task 0，覆蓋檢查已對應每個 V1 功能至 Tasks 1–7，交付檢查於 Task 8。資料型別與服務名稱以前述介面為準。課程額外交付列為後續里程碑，完成 V1 不能直接宣稱滿足全部課程要求。
+- Python 3.12、PostgreSQL 18、psycopg 3 與版本化 SQL migrations；依賴與映像於實際建置時鎖定。
+- 單人狀態版本列鎖管理短寫交易，NUMERIC／Decimal 保存數值，JSONB 保存來源與快照。
+- cooking_run 連結多個成品批次，配合單次原料扣除及營養分配。
+- 每次客製化初始三輪、每回合 12 次模型／24 次工具／三輪澄清；模型初始 reasoning effort 為 medium。正式比較前用開發題定稿。
+- 既有事件採歷史快照，日後方案修改適用後續事件。更正既有事件仍需明確預覽與確認。
 
-此次建立新 repo 並修訂文件。程式實作尚待執行，實際模型、依賴與測試結果於實作時驗證。
+計畫自我檢查涵蓋規格、型別、每個決定對應的任務與主要失敗情境。本次文件更新不代表 Task 0–8 已執行。
+
+- [PostgreSQL 官方 Docker image 與 PGDATA](https://hub.docker.com/_/postgres)
+- [Compose 健康檢查與啟動順序](https://docs.docker.com/compose/how-tos/startup-order/)
+- [uv Docker 指南](https://docs.astral.sh/uv/guides/integration/docker/)
+- [psycopg 安裝](https://www.psycopg.org/psycopg3/docs/basic/install.html)
+- [PostgreSQL 鎖定與交易](https://www.postgresql.org/docs/current/explicit-locking.html)
+- [GPT-6 Luna 官方模型文件](https://developers.openai.com/api/docs/models/gpt-6-luna)
+- [USDA 資料來源說明](https://fdc.nal.usda.gov/data-documentation/)

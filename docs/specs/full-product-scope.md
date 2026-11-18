@@ -92,3 +92,19 @@ related: ["[[50 Projects/Personal Scrum/Projects/EEP500 Nutrition Agent Final Pr
 ## Repository 文件來源
 
 此為 2026-11-17 建立新 repo 時的需求快照，來源為 `/Users/wolverine/Library/Mobile Documents/iCloud~md~obsidian/Documents/wolverine-mind-palace/20 Learning/eep500-graduate-seminar-fall-2026/04-final-report/product/完整產品範圍.md`。
+
+## 2026-11-17 設計討論確認
+
+- 第一版單一使用者，課堂展示使用獨立示範資料，最終產品為 iOS App。
+- 環境採 Docker＋PostgreSQL，容器內使用 uv 管理 Python 與依賴。
+- 使用 Isaac 的 OpenAI API，預設 gpt-6-luna，模型保留為可切換設定，執行與評估記錄實際模型及參數。
+- 主流程固定，階段內使用彈性工具迴圈，查詢、食用與更正可直接進入對應階段。
+- 先選想吃的料理，再由模型調整用量與少量替換，保留料理特色，程式驗算並有限次迭代，最後由 Isaac 確認整份客製化食譜。
+- 驗收範圍為熱量 ±5%、蛋白質 100%–110%、碳水與脂肪各 ±10%。四項同時符合才標示達標，超出時顯示差距並交由 Isaac 決定。
+- 確認加餐搭配後保存於該批備餐，食用時預設計入一盒＋加餐，除非 Isaac 說明有變；食用時才扣除加餐食材。
+- 食用時若加餐庫存不足，先釐清差異，確認後將必要校正、食用紀錄與扣除一起更新。
+- 四道來源為日式雞胸咖哩、Nikujaga 豬里肌便當、BBQ 豬肩肉 Mac & Cheese、蒜香菇菇牛肉雞胸炊飯。來源含估算與不同份量版本，需另核對營養與成本資料。
+- 同一次烹調中，不同餐點組成分成不同批次，各批每盒組成一致。該次實際烹調食材總用量只扣一次。
+- 更正日期、批次或加餐前顯示預覽並確認，依原紀錄的組成與營養快照計算差額。
+
+整合後的實作計畫為 `/Users/wolverine/Develop/nutrition-agent/docs/superpowers/plans/2026-11-17-nutrition-demo.md`。上述為已確認決定，程式實作與環境驗證尚待執行。

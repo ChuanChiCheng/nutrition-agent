@@ -1,0 +1,71 @@
+{
+  "version": "v1.0",
+  "recipes": [
+    {
+      "recipe_id": "curry",
+      "original_path": "/Users/wolverine/Downloads/Japanese_Chicken_Curry_Meal_Prep_Recipe_2026-11-01.pdf",
+      "sha256": "b7bd116ecfaca51c9112909fce63c696462318c1f0c113dceefe8b2374c744bf",
+      "pages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "extraction": "text_extraction",
+      "checked_on": "2026-11-17",
+      "nutrition_status": "historical_estimate_not_reused_as_actual",
+      "missing": "品牌標示、部分單位／生熟／瀝乾重量、價格及即時商品連結待確認"
+    },
+    {
+      "recipe_id": "nikujaga",
+      "original_path": "/Users/wolverine/Downloads/nikujaga_recipe_with_images_4p.pdf",
+      "sha256": "dc27453915434bdd32883fa269c86a44ada8d2ffc6d17d1edb4922689a9d7ec9",
+      "pages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "extraction": "text_extraction",
+      "checked_on": "2026-11-17",
+      "nutrition_status": "historical_estimate_not_reused_as_actual",
+      "missing": "品牌標示、部分單位／生熟／瀝乾重量、價格及即時商品連結待確認"
+    },
+    {
+      "recipe_id": "bbq",
+      "original_path": "/Users/wolverine/Downloads/BBQ_豬肩肉_Mac_and_Cheese_食譜.pdf",
+      "sha256": "3983d491f609a227c6ca3254d1c0842f5741ebd60a491ccd7331c515bc4c965c",
+      "pages": [
+        1
+      ],
+      "extraction": "visual_transcription",
+      "checked_on": "2026-11-17",
+      "nutrition_status": "historical_estimate_not_reused_as_actual",
+      "missing": "品牌標示、部分單位／生熟／瀝乾重量、價格及即時商品連結待確認"
+    },
+    {
+      "recipe_id": "rice_pot",
+      "original_path": "/Users/wolverine/Downloads/蒜香菇菇牛肉雞胸炊飯_六餐食譜.pdf",
+      "sha256": "2caa5efdae2192f0aa89df9ba1af686598aa13d8fc448cee49f8b4a1efb777c6",
+      "pages": [
+        1,
+        2
+      ],
+      "extraction": "text_extraction",
+      "checked_on": "2026-11-17",
+      "nutrition_status": "historical_estimate_not_reused_as_actual",
+      "missing": "品牌標示、部分單位／生熟／瀝乾重量、價格及即時商品連結待確認"
+    }
+  ],
+  "usda_dataset": {
+    "url": "https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip",
+    "sha256": "b80817294b8850530aaedf2e515c02593b1824f763a0ff356e5c2081643e6fd0",
+    "checked_on": "2026-11-17"
+  },
+  "known_gaps": [
+    "未量化蒜、油、罐頭瀝乾重量需先確認",
+    "部分商品營養標示及 g/ml 換算不可假設",
+    "Walmart 商品連結需逐品核對；不編造 URL",
+    "歷史成本僅顯示已知小計；未知範圍不編造"
+  ]
+}

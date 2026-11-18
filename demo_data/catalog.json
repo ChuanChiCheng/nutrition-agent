@@ -1,0 +1,1007 @@
+{
+  "version": "v1.0",
+  "ingredients": [
+    {
+      "id": "chicken",
+      "name": "去骨去皮雞胸肉",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "2.62",
+        "kcal": "120",
+        "protein_g": "22.5",
+        "carbs_g": "0"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "171077",
+        "description": "Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/171077/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": {
+        "usd": "12.43",
+        "quantity": "2194",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "curry",
+        "page": 4,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "rice",
+      "name": "乾白米（USDA 長粒米代用估算）",
+      "unit": "g",
+      "state": "dry",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "0.66",
+        "carbs_g": "79.95",
+        "kcal": "365",
+        "protein_g": "7.13"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "168877",
+        "description": "Rice, white, long-grain, regular, raw, enriched",
+        "url": "https://fdc.nal.usda.gov/food-details/168877/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "broccoli",
+      "name": "冷凍花椰菜",
+      "unit": "g",
+      "state": "frozen",
+      "reference_quantity": "100",
+      "nutrients": {
+        "carbs_g": "4.78",
+        "kcal": "26",
+        "protein_g": "2.81",
+        "fat_g": "0.29"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "169968",
+        "description": "Broccoli, frozen, chopped, unprepared",
+        "url": "https://fdc.nal.usda.gov/food-details/169968/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": {
+        "usd": "2.88",
+        "quantity": "907",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "curry",
+        "page": 4,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "potato",
+      "name": "馬鈴薯",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "0.09",
+        "kcal": "77",
+        "protein_g": "2.05",
+        "carbs_g": "17.49"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "170026",
+        "description": "Potatoes, flesh and skin, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/170026/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": {
+        "usd": "1.75",
+        "quantity": "900",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "curry",
+        "page": 4,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "onion",
+      "name": "洋蔥",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "0.1",
+        "carbs_g": "9.34",
+        "kcal": "40",
+        "protein_g": "1.1"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "170000",
+        "description": "Onions, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/170000/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "carrot",
+      "name": "紅蘿蔔",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "protein_g": "0.93",
+        "fat_g": "0.24",
+        "carbs_g": "9.58",
+        "kcal": "41"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "170393",
+        "description": "Carrots, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/170393/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "garlic",
+      "name": "大蒜",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "carbs_g": "33.06",
+        "kcal": "149",
+        "protein_g": "6.36",
+        "fat_g": "0.5"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "169230",
+        "description": "Garlic, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/169230/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "oil",
+      "name": "橄欖油",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "100",
+        "carbs_g": "0",
+        "kcal": "884",
+        "protein_g": "0"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "171413",
+        "description": "Oil, olive, salad or cooking",
+        "url": "https://fdc.nal.usda.gov/food-details/171413/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "pork_loin",
+      "name": "豬里肌（USDA tenderloin 代用估算）",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "protein_g": "20.65",
+        "fat_g": "3.53",
+        "carbs_g": "0",
+        "kcal": "120"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "168312",
+        "description": "Pork, fresh, loin, tenderloin, separable lean and fat, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/168312/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "pork_shoulder",
+      "name": "豬肩肉",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "17.99",
+        "carbs_g": "0",
+        "kcal": "236",
+        "protein_g": "17.18"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "167843",
+        "description": "Pork, fresh, shoulder, whole, separable lean and fat, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/167843/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": {
+        "usd": "9.82",
+        "quantity": "1500",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "bbq",
+        "page": 1,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "beef",
+      "name": "93/7 牛絞肉",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "7",
+        "carbs_g": "0",
+        "protein_g": "20.85",
+        "kcal": "152"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "173110",
+        "description": "Beef, ground, 93% lean meat / 7% fat, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/173110/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "mushroom",
+      "name": "白蘑菇",
+      "unit": "g",
+      "state": "raw",
+      "reference_quantity": "100",
+      "nutrients": {
+        "fat_g": "0.34",
+        "protein_g": "3.09",
+        "carbs_g": "3.26",
+        "kcal": "22"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "169251",
+        "description": "Mushrooms, white, raw",
+        "url": "https://fdc.nal.usda.gov/food-details/169251/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "butter",
+      "name": "無鹽奶油",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "kcal": "717",
+        "fat_g": "81.11",
+        "carbs_g": "0.06",
+        "protein_g": "0.85"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "173430",
+        "description": "Butter, without salt",
+        "url": "https://fdc.nal.usda.gov/food-details/173430/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": {
+        "usd": "1.48",
+        "quantity": "227",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "bbq",
+        "page": 1,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "sugar",
+      "name": "砂糖",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "protein_g": "0",
+        "fat_g": "0",
+        "kcal": "387",
+        "carbs_g": "99.98"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "169655",
+        "description": "Sugars, granulated",
+        "url": "https://fdc.nal.usda.gov/food-details/169655/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null
+    },
+    {
+      "id": "yogurt",
+      "name": "無脂希臘優格（一般參考）",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "protein_g": "10.19",
+        "fat_g": "0.39",
+        "carbs_g": "3.6",
+        "kcal": "59"
+      },
+      "source": {
+        "status": "usda_reference",
+        "fdc_id": "170894",
+        "description": "Yogurt, Greek, plain, nonfat (Includes foods for USDA's Food Distribution Program)",
+        "url": "https://fdc.nal.usda.gov/food-details/170894/nutrients",
+        "checked_on": "2026-11-17"
+      },
+      "price": null,
+      "addon_serving": "170"
+    },
+    {
+      "id": "canned_chicken",
+      "name": "Kirkland 罐裝雞胸肉（需瀝乾重量及標示）",
+      "unit": "g",
+      "state": "drained",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "curry_block",
+      "name": "S&B Golden Curry Medium Hot",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "18",
+      "nutrients": {
+        "kcal": "90",
+        "protein_g": "1",
+        "carbs_g": "10",
+        "fat_g": "4.5"
+      },
+      "source": {
+        "status": "label_transcribed",
+        "brand": "S&B",
+        "source": "curry PDF",
+        "page": 4,
+        "checked_on": "2026-11-17",
+        "note": "PDF 轉錄實際包裝，未取得目前商品包裝照片"
+      },
+      "price": {
+        "usd": "8.91",
+        "quantity": "276",
+        "currency": "USD",
+        "basis": "historical_used_cost",
+        "source": "curry",
+        "page": 4,
+        "checked_on": "2026-11-17",
+        "note": "歷史成本；不是即時售價，缺漏不當零"
+      }
+    },
+    {
+      "id": "broth",
+      "name": "雞高湯",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "soy",
+      "name": "醬油",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "mirin",
+      "name": "味醂",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "evaporated_milk",
+      "name": "蒸發奶",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "cream",
+      "name": "鮮奶油",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "bbq_sauce",
+      "name": "BBQ 醬",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "american_cheese",
+      "name": "American Cheese",
+      "unit": "slice",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "mac_mix",
+      "name": "Kraft Mac & Cheese",
+      "unit": "box",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    },
+    {
+      "id": "water",
+      "name": "水",
+      "unit": "ml",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "kcal": "0",
+        "protein_g": "0",
+        "fat_g": "0",
+        "carbs_g": "0"
+      },
+      "source": {
+        "status": "composition_reference",
+        "note": "水／鹽不提供本產品追蹤的四項巨量營養；鈉未包含"
+      },
+      "price": null
+    },
+    {
+      "id": "salt",
+      "name": "鹽",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": {
+        "kcal": "0",
+        "protein_g": "0",
+        "fat_g": "0",
+        "carbs_g": "0"
+      },
+      "source": {
+        "status": "composition_reference",
+        "note": "水／鹽不提供本產品追蹤的四項巨量營養；鈉未包含"
+      },
+      "price": null
+    },
+    {
+      "id": "pepper",
+      "name": "黑胡椒",
+      "unit": "g",
+      "state": "packaged",
+      "reference_quantity": "100",
+      "nutrients": null,
+      "source": {
+        "status": "missing",
+        "note": "需提供實際商品營養標示或可核對來源"
+      },
+      "price": null
+    }
+  ],
+  "recipes": [
+    {
+      "id": "curry",
+      "name": "日式雞胸咖哩",
+      "ingredients": [
+        {
+          "ingredient_id": "chicken",
+          "quantity": "2194",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "potato",
+          "quantity": "900",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "onion",
+          "quantity": "700",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "carrot",
+          "quantity": "450",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "curry_block",
+          "quantity": "276",
+          "unit": "g",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "rice",
+          "quantity": "600",
+          "unit": "g",
+          "state": "dry"
+        },
+        {
+          "ingredient_id": "broccoli",
+          "quantity": "907",
+          "unit": "g",
+          "state": "frozen"
+        }
+      ],
+      "unquantified": [
+        "蒜頭 3–5 瓣",
+        "橄欖油合計約 2 tsp",
+        "咖哩水 1400 ml、煮飯水約 780 ml"
+      ],
+      "essential_ingredients": [
+        "chicken",
+        "potato",
+        "curry_block"
+      ],
+      "equipment": [
+        "33 cm 平底鍋",
+        "6 L 湯鍋",
+        "6 Qt Instant Pot",
+        "烤箱",
+        "溫度計"
+      ],
+      "difficulty": [
+        "兩鍋溫和燉煮",
+        "咖哩塊關火後融化",
+        "雞胸後下並測熟度"
+      ],
+      "steps": [
+        "先煮飯、另烤花椰菜。",
+        "切菜，最後處理生雞肉。",
+        "炒洋蔥，最後炒蒜。",
+        "兩鍋各加入一半蔬菜及水，微滾至蔬菜軟。",
+        "每鍋下 1097 g 雞胸，恢復微滾並測中心熟度。",
+        "關火融化每鍋 1.5 盒咖哩塊，再小火攪拌增稠。",
+        "咖哩分七份；六份配飯菜，第七份純咖哩。"
+      ],
+      "versions": [
+        {
+          "status": "historical_record",
+          "outputs": [
+            {
+              "name": "完整便當",
+              "boxes": 6,
+              "estimated_nutrients": {
+                "kcal": 1153,
+                "protein_g": 88.5,
+                "carbs_g": 147.2,
+                "fat_g": 20.6
+              }
+            },
+            {
+              "name": "純咖哩",
+              "boxes": 1,
+              "estimated_nutrients": {
+                "kcal": 748,
+                "protein_g": 77.1,
+                "carbs_g": 60,
+                "fat_g": 19.5
+              }
+            }
+          ]
+        }
+      ],
+      "allowed_substitutions": [],
+      "source_recipe_id": "curry",
+      "data_status": "source_recipe_requires_actual_quantities",
+      "default_requested_boxes": 6
+    },
+    {
+      "id": "nikujaga",
+      "name": "Nikujaga 豬里肌便當",
+      "ingredients": [
+        {
+          "ingredient_id": "pork_loin",
+          "quantity": "2000",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "potato",
+          "quantity": "1800",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "rice",
+          "quantity": "400",
+          "unit": "g",
+          "state": "dry"
+        },
+        {
+          "ingredient_id": "onion",
+          "quantity": "750",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "carrot",
+          "quantity": "450",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "broccoli",
+          "quantity": "900",
+          "unit": "g",
+          "state": "frozen"
+        },
+        {
+          "ingredient_id": "broth",
+          "quantity": "1200",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "soy",
+          "quantity": "120",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "mirin",
+          "quantity": "120",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "sugar",
+          "quantity": "20",
+          "unit": "g",
+          "state": "packaged"
+        }
+      ],
+      "unquantified": [
+        "油 30 ml（需密度或重量）",
+        "乾醃鹽約 10 g 是計畫量"
+      ],
+      "essential_ingredients": [
+        "pork_loin",
+        "potato",
+        "soy"
+      ],
+      "equipment": [
+        "一般湯鍋",
+        "6 Qt Instant Pot",
+        "溫度計"
+      ],
+      "difficulty": [
+        "兩鍋同步燉煮",
+        "蔬菜先煮、豬肉後下",
+        "濃縮醬汁裹肉"
+      ],
+      "steps": [
+        "冷藏乾醃豬肉並切菜。",
+        "先煮 400 g 乾米，取出清潔內鍋。",
+        "兩鍋炒洋蔥、加馬鈴薯與紅蘿蔔。",
+        "各加一半高湯與調味，小滾至蔬菜近熟。",
+        "每鍋分批下 1000 g 肉並測熟度；保留肉塊口感。",
+        "必要時另濃縮湯汁裹肉。",
+        "花椰菜另外加熱；最終盒數由本次實際確認。"
+      ],
+      "versions": [
+        {
+          "status": "historical_record",
+          "boxes": 6
+        },
+        {
+          "status": "unconfirmed_plan",
+          "boxes": 7,
+          "estimated_nutrients": {
+            "kcal": 1066,
+            "protein_g": 79.2,
+            "carbs_g": 128.3,
+            "fat_g": 25
+          },
+          "estimated_cost_usd": "35.12",
+          "note": "不能自動寫成已完成的七盒"
+        }
+      ],
+      "allowed_substitutions": [],
+      "source_recipe_id": "nikujaga",
+      "data_status": "source_recipe_requires_actual_quantities",
+      "default_requested_boxes": 6
+    },
+    {
+      "id": "bbq",
+      "name": "BBQ 豬肩肉 Mac & Cheese",
+      "ingredients": [
+        {
+          "ingredient_id": "mac_mix",
+          "quantity": "4",
+          "unit": "box",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "butter",
+          "quantity": "227",
+          "unit": "g",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "evaporated_milk",
+          "quantity": "237",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "cream",
+          "quantity": "60",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "american_cheese",
+          "quantity": "10",
+          "unit": "slice",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "pork_shoulder",
+          "quantity": "1500",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "bbq_sauce",
+          "quantity": "20",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "broccoli",
+          "quantity": "907",
+          "unit": "g",
+          "state": "frozen"
+        }
+      ],
+      "essential_ingredients": [
+        "mac_mix",
+        "pork_shoulder",
+        "bbq_sauce"
+      ],
+      "equipment": [
+        "壓力鍋",
+        "煮麵鍋",
+        "烤箱"
+      ],
+      "difficulty": [
+        "手撕豬",
+        "濃醬拌合",
+        "含菜與無菜分批"
+      ],
+      "steps": [
+        "豬肩肉切塊，加約 375 ml 水或高湯；來源建議高壓約 60 分鐘，實際以設備與熟度確認。",
+        "洩壓後撕肉，拌 BBQ 醬。",
+        "依包裝煮四盒通心粉，瀝乾後拌奶油、蒸發奶、鮮奶油與起司。",
+        "花椰菜另烤，來源為 200°C 約 20–25 分鐘。",
+        "肉與通心粉分七份；五份有花椰菜，兩份沒有。"
+      ],
+      "versions": [
+        {
+          "status": "historical_record",
+          "known_cost_usd": "16.31",
+          "cost_complete": false,
+          "outputs": [
+            {
+              "name": "含花椰菜",
+              "boxes": 5,
+              "estimated_nutrients": {
+                "kcal": 1304,
+                "protein_g": 69,
+                "carbs_g": 102,
+                "fat_g": 70
+              }
+            },
+            {
+              "name": "不含花椰菜",
+              "boxes": 2,
+              "estimated_nutrients": {
+                "kcal": 1251,
+                "protein_g": 63,
+                "carbs_g": 93,
+                "fat_g": 70
+              }
+            }
+          ]
+        }
+      ],
+      "allowed_substitutions": [],
+      "source_recipe_id": "bbq",
+      "data_status": "source_recipe_requires_actual_quantities",
+      "default_requested_boxes": 6
+    },
+    {
+      "id": "rice_pot",
+      "name": "蒜香菇菇牛肉雞胸炊飯",
+      "ingredients": [
+        {
+          "ingredient_id": "beef",
+          "quantity": "998",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "rice",
+          "quantity": "660",
+          "unit": "g",
+          "state": "dry"
+        },
+        {
+          "ingredient_id": "mushroom",
+          "quantity": "454",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "onion",
+          "quantity": "200",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "carrot",
+          "quantity": "240",
+          "unit": "g",
+          "state": "raw"
+        },
+        {
+          "ingredient_id": "broth",
+          "quantity": "800",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "soy",
+          "quantity": "40",
+          "unit": "ml",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "butter",
+          "quantity": "10",
+          "unit": "g",
+          "state": "packaged"
+        },
+        {
+          "ingredient_id": "broccoli",
+          "quantity": "900",
+          "unit": "g",
+          "state": "frozen"
+        }
+      ],
+      "unquantified": [
+        "雞胸為 12.5 oz 大罐四罐，需補瀝乾重量（4 為來源罐數，不能當 4 g）",
+        "蒜 6 瓣",
+        "油 15 ml",
+        "黑胡椒少量"
+      ],
+      "essential_ingredients": [
+        "beef",
+        "canned_chicken",
+        "rice",
+        "mushroom"
+      ],
+      "equipment": [
+        "6 Qt Instant Pot",
+        "溫度計"
+      ],
+      "difficulty": [
+        "分兩鍋、每鍋三份",
+        "刮鍋底避免焦底",
+        "鋪米後不往下攪拌"
+      ],
+      "steps": [
+        "全部分兩份；每鍋洗 330 g 乾米。",
+        "每鍋炒 499 g 牛肉，加洋蔥菇與蒜。",
+        "Cancel，加高湯刮鍋底；每鍋高湯總計 400 ml。",
+        "加紅蘿蔔、鋪米，不往下攪拌，核對內鍋半滿線。",
+        "依來源 High 4 分鐘、自然釋壓 10 分鐘。",
+        "拌入每鍋兩罐瀝乾雞胸，加熱至來源指定熟度。",
+        "每鍋分三盒，花椰菜另加。"
+      ],
+      "versions": [
+        {
+          "status": "historical_estimate",
+          "boxes": 6,
+          "pots": 2,
+          "estimated_nutrients": {
+            "kcal": 910,
+            "protein_g": 78,
+            "carbs_g": 105,
+            "fat_g": 20
+          }
+        }
+      ],
+      "allowed_substitutions": [],
+      "source_recipe_id": "rice_pot",
+      "data_status": "source_recipe_requires_actual_quantities",
+      "default_requested_boxes": 6
+    }
+  ]
+}

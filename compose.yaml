@@ -1,0 +1,35 @@
+x-db: &database
+  image: postgres:18-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+  environment: &db-env
+    POSTGRES_USER: ${POSTGRES_USER:-nutrition}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    POSTGRES_DB: ${POSTGRES_DB:-nutrition}
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  mem_limit: 384m
+services:
+  db:
+    <<: *database
+    volumes: ["db_data:/var/lib/postgresql"]
+  db_test:
+    <<: *database
+    profiles: [test]
+    environment:
+      <<: *db-env
+      POSTGRES_DB: nutrition_test
+    volumes: ["test_data:/var/lib/postgresql"]
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 512m
+    stdin_open: true
+    tty: true
+volumes:
+  db_data:
+  test_data:

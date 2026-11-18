@@ -163,6 +163,23 @@ def _matches_event(event: dict, name: str) -> bool:
     return event.get("action") == name
 
 
+def _matches_sequence_step(event: dict, step) -> bool:
+    if isinstance(step, str):
+        return _matches_event(event, step)
+    if not isinstance(step, dict) or set(step) - {"event", "topic"}:
+        return False
+    name = step.get("event")
+    return (
+        isinstance(name, str)
+        and _matches_event(event, name)
+        and all(event.get(key) == value for key, value in step.items() if key != "event")
+    )
+
+
+def _sequence_label(step) -> str:
+    return step if isinstance(step, str) else str(step.get("event", "<invalid>"))
+
+
 def _first_index(events: list[dict], name: str, start=0):
     return next((index for index in range(start, len(events)) if _matches_event(events[index], name)), None)
 
@@ -177,14 +194,27 @@ def grade_order(task, episode) -> GradePart:
             continue
         sequence = rule.get("sequence")
         if sequence is not None:
-            if not isinstance(sequence, list) or not all(isinstance(name, str) for name in sequence):
+            valid_step = lambda step: (
+                isinstance(step, str)
+                or (
+                    isinstance(step, dict)
+                    and set(step) <= {"event", "topic"}
+                    and isinstance(step.get("event"), str)
+                    and all(isinstance(value, str) for value in step.values())
+                )
+            )
+            if not isinstance(sequence, list) or not all(valid_step(step) for step in sequence):
                 reasons.append(f"required-order rule {rule_number} has an invalid sequence")
                 continue
             cursor = 0
-            for name in sequence:
-                found = _first_index(events, name, cursor)
+            for step in sequence:
+                found = next(
+                    (index for index in range(cursor, len(events)) if _matches_sequence_step(events[index], step)),
+                    None,
+                )
                 if found is None:
-                    reasons.append(f"required order missing or misplaced: {' → '.join(sequence)}")
+                    labels = [_sequence_label(item) for item in sequence]
+                    reasons.append(f"required order missing or misplaced: {' → '.join(labels)}")
                     break
                 cursor = found + 1
             continue

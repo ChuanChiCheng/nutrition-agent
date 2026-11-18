@@ -5,7 +5,9 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import sys
+from urllib.parse import urlsplit
 
 import openai
 from psycopg.conninfo import conninfo_to_dict
@@ -16,7 +18,7 @@ from .contracts import EpisodeResult, EvalConfig, ScoredEpisode, SuiteResult
 from .controllers import agent_factory
 from .baseline import baseline_factory
 from .grading import JudgeUnavailable, _apply_changes, grade_episode, grade_suite
-from .judge import JUDGE_VERSION
+from .judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA, JUDGE_VERSION
 from .report import summarize_runs, write_run_artifacts
 from .state import normalize_state
 from .tasks import load_tasks, validate_taskset
@@ -31,6 +33,50 @@ def _parser():
     return parser
 
 
+def _database_migration_manifest() -> list[dict[str, str]]:
+    directory = Path(__file__).resolve().parents[1] / "nutrition_demo" / "migrations"
+    return [
+        {"version": path.name, "sha256": sha256(path.read_bytes()).hexdigest()}
+        for path in sorted(directory.glob("*.sql"))
+    ]
+
+
+def _judge_schema_sha256() -> str:
+    payload = json.dumps(JUDGE_SCHEMA, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _source_tree_sha256() -> str:
+    root = Path(__file__).resolve().parents[1]
+    paths = [root / "pyproject.toml", root / "uv.lock", root / ".python-version"]
+    for directory_name in ("nutrition_demo", "nutrition_eval"):
+        paths.extend(
+            path
+            for path in (root / directory_name).rglob("*")
+            if path.is_file() and path.suffix in {".py", ".sql"}
+        )
+    digest = sha256()
+    for path in sorted(paths, key=lambda item: item.relative_to(root).as_posix()):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _contains_secret_setting(value) -> bool:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = str(key).lower()
+            if normalized in {"api_key", "openai_api_key", "database_url", "test_database_url", "database_password"}:
+                return True
+            if _contains_secret_setting(child):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_secret_setting(child) for child in value)
+    return False
+
+
 def _load_config(path: Path) -> tuple[dict, EvalConfig]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -38,8 +84,7 @@ def _load_config(path: Path) -> tuple[dict, EvalConfig]:
         raise ValueError(f"無法讀取評估設定檔：{exc}") from exc
     if not isinstance(raw, dict):
         raise ValueError("評估設定檔必須是 JSON object")
-    forbidden = {"api_key", "openai_api_key", "OPENAI_API_KEY", "database_url", "DATABASE_URL"}
-    if forbidden & {str(key) for key in raw}:
+    if _contains_secret_setting(raw):
         raise ValueError("評估設定檔不可包含 API key 或資料庫連線密碼")
     if raw.get("judge_version") != JUDGE_VERSION:
         raise ValueError(f"judge 版本不符：預期 {JUDGE_VERSION}")
@@ -51,6 +96,16 @@ def _load_config(path: Path) -> tuple[dict, EvalConfig]:
         )
     if raw.get("judge_store") is not False:
         raise ValueError("judge 必須設定 store=false")
+    migrations = _database_migration_manifest()
+    if not migrations or raw.get("database_migrations") != migrations:
+        raise ValueError("資料庫 migration 版本或 checksum 與凍結設定不符")
+    if raw.get("database_migration_version") != migrations[-1]["version"]:
+        raise ValueError("database_migration_version 與目前 migration manifest 不符")
+    expected_instructions_hash = sha256(JUDGE_INSTRUCTIONS.encode("utf-8")).hexdigest()
+    if raw.get("judge_instructions_sha256") != expected_instructions_hash:
+        raise ValueError("judge prompt SHA-256 與凍結設定不符")
+    if raw.get("judge_schema_sha256") != _judge_schema_sha256():
+        raise ValueError("judge schema SHA-256 與凍結設定不符")
     try:
         now = datetime.fromisoformat(raw["now"])
         config = EvalConfig(
@@ -106,13 +161,18 @@ def _preflight(args):
         validate_taskset(tasks, expected_count=50)
         if task_hash != raw_config.get("formal_taskset_sha256"):
             raise ValueError("正式題庫 SHA-256 與 eval_config.json 不符；請先重新核對並凍結版本")
+        program_commit = os.environ.get("EVAL_PROGRAM_COMMIT", "")
+        if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", program_commit):
+            raise ValueError("正式評估需要 EVAL_PROGRAM_COMMIT（40 或 64 字元的 Git commit SHA）")
         database = _validate_test_database()
         if not os.environ.get("OPENAI_API_KEY"):
             raise ValueError("正式評估需要 OPENAI_API_KEY；未設定時不會啟動 controller")
+    program_commit = os.environ.get("EVAL_PROGRAM_COMMIT") or None
     output_dir = Path(args.output)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise ValueError(f"輸出目錄已存在且非空：{output_dir}")
-    return raw_config, config, tasks, task_hash, database, output_dir
+    config_hash = sha256(args.config.read_bytes()).hexdigest()
+    return raw_config, config, tasks, task_hash, database, output_dir, config_hash, program_commit
 
 
 class _FakeUsage:
@@ -216,13 +276,17 @@ def _run_fake_dry_run(tasks, config):
 def main(argv=None) -> int:
     args = _parser().parse_args(argv)
     try:
-        raw_config, config, tasks, task_hash, database, output_dir = _preflight(args)
+        raw_config, config, tasks, task_hash, database, output_dir, config_hash, program_commit = _preflight(args)
     except ValueError as exc:
         print(f"評估未啟動：{exc}", file=sys.stderr)
         return 2
 
     metadata = {
         "run_mode": "dry_run" if args.dry_run else "formal",
+        "program_commit": program_commit,
+        "source_tree_sha256": _source_tree_sha256(),
+        "eval_config_sha256": config_hash,
+        "frozen_eval_config": raw_config,
         "task_count": len(tasks),
         "task_version": config.task_version,
         "taskset_sha256": task_hash,
@@ -231,9 +295,24 @@ def main(argv=None) -> int:
         "controller_model_id": config.model_id,
         "controller_reasoning_effort": config.reasoning_effort,
         "judge_model_id": config.judge_model_id,
+        "judge_parameters": dict(config.judge_parameters),
         "judge_version": raw_config.get("judge_version"),
+        "judge_instructions": JUDGE_INSTRUCTIONS,
+        "judge_schema": JUDGE_SCHEMA,
+        "judge_instructions_sha256": raw_config["judge_instructions_sha256"],
+        "judge_schema_sha256": raw_config["judge_schema_sha256"],
         "tool_version": raw_config.get("tool_version"),
         "openai_sdk_version": openai.__version__,
+        "controller_limits": {
+            "max_model_calls": config.max_model_calls,
+            "max_tool_calls": config.max_tool_calls,
+            "max_clarifications": config.max_clarifications,
+            "max_output_tokens": config.max_output_tokens,
+            "timeout_seconds": config.timeout_seconds,
+        },
+        "database_migrations": _database_migration_manifest(),
+        "database_migration_version": raw_config["database_migration_version"],
+        "model_service_host": urlsplit(os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").hostname,
         "planned_controller_episodes": len(tasks) * 4,
         "planned_judge_calls": len(tasks) * 4,
     }

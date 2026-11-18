@@ -221,6 +221,33 @@ def test_order_grader_rejects_write_before_clarification_or_approval():
     assert not grade_order(task, missing_id).passed
 
 
+def test_order_grader_rejects_clarification_on_the_wrong_topic():
+    from nutrition_eval.grading import grade_order
+
+    task = grading_task(
+        scripted_answers=["synthetic lunch batch"],
+        required_order=[{"sequence": [
+            {"event": "ask_user", "topic": "batch"},
+            "scripted_answer",
+            "write",
+        ]}],
+        expected_changes=[],
+    )
+    correct_topic = episode_result(interactions=[
+        {"kind": "ask_user", "topic": "batch"},
+        {"kind": "scripted_answer", "message": "synthetic lunch batch"},
+        {"kind": "write", "action": "log_meal"},
+    ])
+    wrong_topic = episode_result(interactions=[
+        {"kind": "ask_user", "topic": "event"},
+        {"kind": "scripted_answer", "message": "synthetic lunch batch"},
+        {"kind": "write", "action": "log_meal"},
+    ])
+
+    assert grade_order(task, correct_topic).passed
+    assert not grade_order(task, wrong_topic).passed
+
+
 def test_failed_episode_cannot_pass_even_if_final_state_matches():
     from nutrition_eval.grading import grade_episode
     from nutrition_eval.state import normalize_state

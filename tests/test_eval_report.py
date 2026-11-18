@@ -169,3 +169,71 @@ def test_fake_client_development_dry_run_is_marked_not_live(tmp_path):
     status = json.loads((tmp_path / "dry-run" / "status.json").read_text())
     assert status["run_mode"] == "dry_run"
     assert "not a live model comparison" in (tmp_path / "dry-run" / "summary.md").read_text()
+
+
+def test_run_artifacts_capture_full_reproducibility_metadata(tmp_path, monkeypatch):
+    from hashlib import sha256
+
+    from nutrition_eval import __main__ as cli
+
+    root = Path(__file__).resolve().parents[1]
+    config_path = root / "eval_config.json"
+    monkeypatch.setenv("EVAL_PROGRAM_COMMIT", "review-test-commit")
+    result = cli.main([
+        "--tasks", str(root / "development_tasks.jsonl"),
+        "--config", str(config_path),
+        "--output", str(tmp_path / "reproducible-run"),
+        "--dry-run",
+    ])
+
+    assert result == 0
+    status = json.loads((tmp_path / "reproducible-run" / "status.json").read_text())
+    metadata = status["metadata"]
+    config = json.loads(config_path.read_text())
+    assert metadata["program_commit"] == "review-test-commit"
+    assert len(metadata["source_tree_sha256"]) == 64
+    assert metadata["eval_config_sha256"] == sha256(config_path.read_bytes()).hexdigest()
+    assert metadata["frozen_eval_config"] == config
+    assert metadata["controller_limits"] == {
+        "max_model_calls": 12,
+        "max_tool_calls": 24,
+        "max_clarifications": 3,
+        "max_output_tokens": 4096,
+        "timeout_seconds": 45,
+    }
+    assert metadata["database_migrations"] == [{
+        "version": config["database_migration_version"],
+        "sha256": config["database_migration_sha256"],
+    }]
+    assert metadata["judge_parameters"] == config["judge_parameters"]
+    assert metadata["judge_instructions"] == cli.JUDGE_INSTRUCTIONS
+    assert metadata["judge_schema"] == cli.JUDGE_SCHEMA
+    assert metadata["judge_instructions_sha256"] == config["judge_instructions_sha256"]
+    assert metadata["judge_schema_sha256"] == config["judge_schema_sha256"]
+
+
+def test_formal_cli_requires_program_commit_before_controllers(tmp_path, monkeypatch):
+    from argparse import Namespace
+
+    import pytest
+
+    from nutrition_eval import __main__ as cli
+
+    root = Path(__file__).resolve().parents[1]
+    factory_calls = []
+    monkeypatch.setattr(cli, "agent_factory", lambda *_args, **_kwargs: factory_calls.append("agent"))
+    monkeypatch.setattr(cli, "baseline_factory", lambda *_args, **_kwargs: factory_calls.append("baseline"))
+    monkeypatch.setenv("TEST_DATABASE_URL", "host=db_test dbname=nutrition_test user=test password=test")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-placeholder")
+    monkeypatch.delenv("EVAL_PROGRAM_COMMIT", raising=False)
+
+    monkeypatch.setattr(cli, "_validate_test_database", lambda: {"host": "db_test", "dbname": "nutrition_test"})
+    args = Namespace(
+        tasks=root / "tasks.jsonl",
+        config=root / "eval_config.json",
+        output=tmp_path / "formal-run",
+        dry_run=False,
+    )
+    with pytest.raises(ValueError, match="EVAL_PROGRAM_COMMIT"):
+        cli._preflight(args)
+    assert factory_calls == []

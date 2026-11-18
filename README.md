@@ -105,12 +105,12 @@ docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:
 ```bash
 docker compose --profile test up -d --wait db_test
 mkdir -p results
-docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --entrypoint uv app run --locked python -m nutrition_eval --tasks tasks.jsonl --config eval_config.json --output results/formal-50-v1
+docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --env "EVAL_PROGRAM_COMMIT=$(git rev-parse HEAD)" --entrypoint uv app run --locked python -m nutrition_eval --tasks tasks.jsonl --config eval_config.json --output results/formal-50-v1
 ```
 
-`results` 資料夾掛載到容器後，報表會保留在專案目錄。CLI 會在啟動 controller 前檢查正式題庫、凍結 hash 與 `db_test/nutrition_test` 連線；不會讀取或退回日常 `DATABASE_URL`。每題 Agent 從乾淨 schema 跑三次，baseline 跑一次，總共 200 個 controller episodes；judge 逐一評分文字回答。若 controller 基礎設施或 judge 中斷，輸出會保留 partial episodes 和錯誤，但不產生正式 summary 指標。
+`results` 資料夾掛載到容器後，報表會保留在專案目錄。正式指令會把目前 Git commit 傳給評估程式；CLI 會在啟動 controller 前檢查正式題庫、凍結 hash、程式 commit 與 `db_test/nutrition_test` 連線，不會讀取或退回日常 `DATABASE_URL`。每題 Agent 從乾淨 schema 跑三次，baseline 跑一次，總共 200 個 controller episodes；judge 逐一評分文字回答。若 controller 基礎設施或 judge 中斷，輸出會保留 partial episodes 和錯誤，但不產生正式 summary 指標。
 
-每個 run 目錄包含 `episodes.jsonl` 原始 trace、互動、狀態、逐題 grade 與模型／工具／fixture 版本；`status.json` 記錄 run 完整性；完整 run 另有 `summary.md`、`failure_trace.md` 和一段 `failure_analysis.md`。Summary 列出 Agent 150 筆與 baseline 50 筆的 accuracy、平均 turns、model calls、latency、nearest-rank p95、tokens、pass@3、pass^3 和翻轉題號。
+每個 run 目錄包含 `episodes.jsonl` 原始 trace、互動、狀態、逐題 grade 與模型／工具／fixture 版本；`status.json` 記錄 run 完整性、程式 commit 與 source hash、完整凍結設定、migration checksum、judge prompt/schema 及其 hash、資源上限；完整 run 另有 `summary.md`、`failure_trace.md` 和一段 `failure_analysis.md`。Summary 列出 Agent 150 筆與 baseline 50 筆的 accuracy、平均 turns、model calls、latency、nearest-rank p95、tokens、pass@3、pass^3 和翻轉題號。
 
 正式 50 題是目前這個課程評估範圍。之後的 200+ 題 benchmark 與獨立 safety suite 是不同資料集，不會併入本次 accuracy。
 

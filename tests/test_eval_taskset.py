@@ -49,18 +49,112 @@ def test_formal_taskset_matches_approved_category_counts_and_provenance():
         for rule in task.required_order:
             sequence = rule.get("sequence", [])
             if sequence:
-                for name in sequence:
+                for step in sequence:
+                    name = step["event"] if isinstance(step, dict) else step
+                    qualifiers = (
+                        {key: value for key, value in step.items() if key != "event"}
+                        if isinstance(step, dict)
+                        else {}
+                    )
                     if name == "preview":
-                        interactions.append({"kind": "preview", "preview_id": "preview-test"})
+                        interactions.append({"kind": "preview", "preview_id": "preview-test", **qualifiers})
                     elif name == "approval":
-                        interactions.append({"kind": "approval", "preview_id": "preview-test", "outcome": task.approval})
+                        interactions.append({"kind": "approval", "preview_id": "preview-test", "outcome": task.approval, **qualifiers})
                     else:
-                        interactions.append({"kind": name})
+                        interactions.append({"kind": name, **qualifiers})
             elif rule.get("event"):
-                interactions.append({"kind": rule["event"]})
+                interactions.append({
+                    "kind": rule["event"],
+                    **({"topic": rule["topic"]} if "topic" in rule else {}),
+                })
         if task.expected_changes and not any(item.get("kind") == "write" for item in interactions):
             interactions.append({"kind": "write"})
         assert grade_order(task, SimpleNamespace(interactions=interactions, trace=[])).passed, task.id
+
+
+def test_preparation_fixtures_can_create_preview_through_shared_dispatcher():
+    from datetime import datetime
+    import os
+
+    from nutrition_demo.agent import DemoAgent, Settings
+    from nutrition_demo.catalog import Catalog
+    from nutrition_demo.service import NutritionService
+    from nutrition_demo.workflow import Workflow
+    from nutrition_eval.fixtures import episode_store, seed_fixture
+    from nutrition_eval.tasks import load_tasks
+
+    tasks = [task for task in load_tasks(ROOT / "tasks.jsonl", expected_count=50) if task.category == "preparation"]
+    assert len(tasks) == 8
+    dsn = os.environ["TEST_DATABASE_URL"]
+    for task in tasks:
+        with episode_store(dsn, "eval_prepare") as store:
+            seed_fixture(store, task.fixture)
+            manifest = task.fixture["provenance"]["source_manifest"]
+            catalog = Catalog(task.fixture["catalog"], manifest)
+            service = NutritionService(
+                store,
+                catalog,
+                clock=lambda: datetime.fromisoformat("2026-11-18T07:30:00-08:00"),
+            )
+            workflow = Workflow(service, session_id="evaluation")
+            agent = DemoAgent(service, workflow, client=None, settings=Settings())
+            result = agent._dispatch(
+                "preview_preparation",
+                {
+                    "recipe_id": "curry",
+                    "actual_usage": [
+                        {"ingredient_id": "chicken", "quantity": "300", "unit": "g", "state": "raw"},
+                        {"ingredient_id": "rice", "quantity": "150", "unit": "g", "state": "dry"},
+                    ],
+                    "outputs": [{
+                        "name": "合成測試批次",
+                        "boxes": 5,
+                        "allocations": [
+                            {"cooking_ingredient_id": "chicken", "quantity": "300", "unit": "g"},
+                            {"cooking_ingredient_id": "rice", "quantity": "150", "unit": "g"},
+                        ],
+                    }],
+                    "prepared_on": "2026-11-18",
+                    "confirmed_dispositions": [],
+                },
+                f"preview-test-{task.id}",
+            )
+
+            assert result.ok, f"{task.id}: {result.error}"
+            assert workflow.load()["pending_preview"] == result.data["id"]
+
+
+def test_ambiguous_meal_case_rejects_an_unrelated_clarification_topic():
+    from types import SimpleNamespace
+
+    from nutrition_eval.grading import grade_order
+    from nutrition_eval.tasks import load_tasks
+
+    task = next(task for task in load_tasks(ROOT / "tasks.jsonl", expected_count=50) if task.id == "M08")
+    correct_topic = SimpleNamespace(
+        interactions=[
+            {"kind": "ask_user", "topic": "batch"},
+            {"kind": "scripted_answer", "message": task.scripted_answers[0]},
+            {"kind": "write", "action": "log_meal"},
+        ],
+        trace=[],
+    )
+    wrong_topic = SimpleNamespace(
+        interactions=[
+            {"kind": "ask_user", "topic": "event"},
+            {"kind": "scripted_answer", "message": task.scripted_answers[0]},
+            {"kind": "write", "action": "log_meal"},
+        ],
+        trace=[],
+    )
+
+    assert any(
+        isinstance(step, dict) and step.get("event") == "ask_user" and step.get("topic") == "batch"
+        for rule in task.required_order
+        for step in rule.get("sequence", [])
+    )
+    assert grade_order(task, correct_topic).passed
+    assert not grade_order(task, wrong_topic).passed
 
 
 def test_eval_config_freezes_clock_models_versions_and_excludes_credentials():
@@ -87,6 +181,13 @@ def test_eval_config_freezes_clock_models_versions_and_excludes_credentials():
     assert config["openai_sdk_version"] == openai_version
     assert config["dataset_version"] == config["task_version"] == "nutrition-eval-50-v1"
     assert config["formal_taskset_sha256"] == sha256((ROOT / "tasks.jsonl").read_bytes()).hexdigest()
+    from nutrition_eval.judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA
+
+    migration = ROOT / "nutrition_demo" / "migrations" / config["database_migration_version"]
+    assert config["database_migration_sha256"] == sha256(migration.read_bytes()).hexdigest()
+    assert config["judge_instructions_sha256"] == sha256(JUDGE_INSTRUCTIONS.encode("utf-8")).hexdigest()
+    schema_bytes = json.dumps(JUDGE_SCHEMA, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    assert config["judge_schema_sha256"] == sha256(schema_bytes).hexdigest()
     assert "api_key" not in config and "OPENAI_API_KEY" not in json.dumps(config)
 
 

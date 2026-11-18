@@ -141,7 +141,7 @@
 - [x] Implement the episode loop, trace aggregation, monotonic latency, timeout/resource policy and suite orchestration; preserve partial controller trace on failure.
 - [x] Rerun `tests/test_eval_episode.py -q` and existing `tests/test_demo_scenario.py -q`; controller, episode and existing scenario tests pass.
 - [x] Run the full suite; confirm all 132 tests pass.
-- [ ] Commit `feat: run isolated scripted evaluation episodes`.
+- [x] Commit `feat: run isolated scripted evaluation episodes`.
 
 ## Task 5: Independent Grader and Rubric Judge
 
@@ -194,16 +194,16 @@
 - `write_run_artifacts(output_dir: Path, suite: SuiteResult, results: list[ScoredEpisode], summary: dict | None) -> None` writes raw `episodes.jsonl`, run status/metadata, a side-by-side `summary.md` for complete runs and a failure-trace file under `results/<run_id>/`. Incomplete runs preserve partial episodes and their reason without presenting partial metrics as final. After a complete formal run, write `failure_analysis.md` from one actual failed episode; if there were none, state that no controller failure was observed.
 - CLI `python -m nutrition_eval --tasks tasks.jsonl --config eval_config.json --output results/<run_id>` validates the taskset before any controller starts and refuses the personal `DATABASE_URL`.
 
-- [ ] Write `test_report_computes_pass_at_3_pass_power_3_flips_and_percentile`; use fixed synthetic run data to assert exact accuracy, metrics, and nearest-rank p95.
-- [ ] Write `test_report_saves_episode_samples_and_metadata`; assert raw rows retain controller, task, repeat, model/tool/fixture versions and failures.
-- [ ] Write `test_cli_aborts_before_execution_on_invalid_taskset_or_unsafe_database`; assert no controller call occurs.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_report.py -q`; confirm they fail before implementation.
-- [ ] Implement the CLI orchestration: run controllers, grade every episode, mark judge interruption incomplete, aggregate only complete scored runs, and preserve raw partial episodes plus status metadata; document that Agent has 150 episode samples and baseline 50.
-- [ ] Update README with test DB startup, no-key dry run, formal-run command, output files, frozen settings and the separate 200-task/safety-suite scope.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py tests/test_eval_fixtures.py tests/test_eval_controllers.py tests/test_eval_episode.py tests/test_eval_grading.py tests/test_eval_taskset.py tests/test_eval_report.py -q`; confirm all evaluation tests pass.
-- [ ] Run the complete existing suite with `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/ -q`; confirm V1 tests remain green.
-- [ ] Run the fake-client development dry run and inspect generated JSONL/Markdown output; do not label it as a live-model comparison.
-- [ ] Commit `feat: report agent baseline evaluation results`.
+- [x] Write `test_report_computes_pass_at_3_pass_power_3_flips_and_percentile`; use fixed synthetic run data to assert exact accuracy, metrics, and nearest-rank p95.
+- [x] Write `test_report_saves_episode_samples_and_metadata`; assert raw rows retain controller, task, repeat, model/tool/fixture versions and failures.
+- [x] Write `test_cli_aborts_before_execution_on_invalid_taskset_or_unsafe_database`; assert no controller call occurs.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_report.py -q`; confirm they fail before implementation.
+- [x] Implement the CLI orchestration: run controllers, grade every episode, mark judge interruption incomplete, aggregate only complete scored runs, and preserve raw partial episodes plus status metadata; document that Agent has 150 episode samples and baseline 50.
+- [x] Update README with test DB startup, no-key dry run, formal-run command, output files, frozen settings and the separate 200-task/safety-suite scope.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_tasks.py tests/test_eval_fixtures.py tests/test_eval_controllers.py tests/test_eval_episode.py tests/test_eval_grading.py tests/test_eval_taskset.py tests/test_eval_report.py -q`; confirm all evaluation tests pass.
+- [x] Run the complete existing suite with `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/ -q`; confirm V1 tests remain green.
+- [x] Run the fake-client development dry run and inspect generated JSONL/Markdown output; do not label it as a live-model comparison.
+- [x] Commit `feat: report agent baseline evaluation results`.
 
 ## Formal Run Handoff
 

@@ -1,0 +1,279 @@
+"""Run the evaluation harness or its explicitly labeled fake-client dry run."""
+import argparse
+from datetime import datetime
+from hashlib import sha256
+import json
+import os
+from pathlib import Path
+import sys
+
+import openai
+from psycopg.conninfo import conninfo_to_dict
+
+from nutrition_demo.tools import TOOL_VERSION
+
+from .contracts import EpisodeResult, EvalConfig, ScoredEpisode, SuiteResult
+from .controllers import agent_factory
+from .baseline import baseline_factory
+from .grading import JudgeUnavailable, _apply_changes, grade_episode, grade_suite
+from .judge import JUDGE_VERSION
+from .report import summarize_runs, write_run_artifacts
+from .state import normalize_state
+from .tasks import load_tasks, validate_taskset
+
+
+def _parser():
+    parser = argparse.ArgumentParser(prog="python -m nutrition_eval")
+    parser.add_argument("--tasks", type=Path, required=True)
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--dry-run", action="store_true", help="use synthetic fake clients; no live model or database calls")
+    return parser
+
+
+def _load_config(path: Path) -> tuple[dict, EvalConfig]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"無法讀取評估設定檔：{exc}") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("評估設定檔必須是 JSON object")
+    forbidden = {"api_key", "openai_api_key", "OPENAI_API_KEY", "database_url", "DATABASE_URL"}
+    if forbidden & {str(key) for key in raw}:
+        raise ValueError("評估設定檔不可包含 API key 或資料庫連線密碼")
+    if raw.get("judge_version") != JUDGE_VERSION:
+        raise ValueError(f"judge 版本不符：預期 {JUDGE_VERSION}")
+    if raw.get("tool_version") != TOOL_VERSION:
+        raise ValueError(f"工具版本不符：預期 {TOOL_VERSION}")
+    if raw.get("openai_sdk_version") != openai.__version__:
+        raise ValueError(
+            f"OpenAI SDK 版本不符：設定為 {raw.get('openai_sdk_version')}，執行環境為 {openai.__version__}"
+        )
+    if raw.get("judge_store") is not False:
+        raise ValueError("judge 必須設定 store=false")
+    try:
+        now = datetime.fromisoformat(raw["now"])
+        config = EvalConfig(
+            now=now,
+            model_id=raw["model_id"],
+            reasoning_effort=raw.get("reasoning_effort"),
+            max_model_calls=int(raw["max_model_calls"]),
+            max_tool_calls=int(raw["max_tool_calls"]),
+            max_clarifications=int(raw["max_clarifications"]),
+            max_output_tokens=int(raw["max_output_tokens"]),
+            timeout_seconds=int(raw["timeout_seconds"]),
+            judge_model_id=raw["judge_model_id"],
+            judge_parameters=dict(raw["judge_parameters"]),
+            task_version=raw["task_version"],
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"評估設定欄位不完整或格式錯誤：{exc}") from exc
+    if now.tzinfo is None or raw.get("timezone") != "America/Los_Angeles":
+        raise ValueError("固定時鐘必須包含時區，且設定時區必須是 America/Los_Angeles")
+    return raw, config
+
+
+def _validate_test_database() -> dict:
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        raise ValueError("缺少 TEST_DATABASE_URL；不會改用個人資料庫")
+    try:
+        target = conninfo_to_dict(dsn)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("TEST_DATABASE_URL 格式無效") from exc
+    if target.get("host") != "db_test" or target.get("dbname") != "nutrition_test":
+        raise ValueError("只允許連到 db_test/nutrition_test 測試資料庫")
+    personal_dsn = os.environ.get("DATABASE_URL")
+    if personal_dsn:
+        try:
+            personal = conninfo_to_dict(personal_dsn)
+        except (TypeError, ValueError):
+            personal = {}
+        if personal and (personal.get("host"), personal.get("dbname")) == (target.get("host"), target.get("dbname")):
+            raise ValueError("TEST_DATABASE_URL 與 DATABASE_URL 指向同一資料庫，拒絕啟動")
+    return {"host": target.get("host"), "dbname": target.get("dbname")}
+
+
+def _preflight(args):
+    raw_config, config = _load_config(args.config)
+    tasks = load_tasks(args.tasks)
+    task_hash = sha256(args.tasks.read_bytes()).hexdigest()
+    if args.dry_run:
+        if not 3 <= len(tasks) <= 5 or not all(task.id.startswith("D") for task in tasks):
+            raise ValueError("fake-client dry run 僅接受 3–5 題 development_tasks.jsonl")
+        database = None
+    else:
+        validate_taskset(tasks, expected_count=50)
+        if task_hash != raw_config.get("formal_taskset_sha256"):
+            raise ValueError("正式題庫 SHA-256 與 eval_config.json 不符；請先重新核對並凍結版本")
+        database = _validate_test_database()
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise ValueError("正式評估需要 OPENAI_API_KEY；未設定時不會啟動 controller")
+    output_dir = Path(args.output)
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(f"輸出目錄已存在且非空：{output_dir}")
+    return raw_config, config, tasks, task_hash, database, output_dir
+
+
+class _FakeUsage:
+    def model_dump(self):
+        return {"input_tokens": 0, "output_tokens": 0}
+
+
+class _FakeJudgeResponse:
+    status = "completed"
+    usage = _FakeUsage()
+
+    def __init__(self, output_text):
+        self.output_text = output_text
+
+
+class _FakeJudge:
+    def __init__(self):
+        self.responses = self
+
+    def create(self, **request):
+        payload = json.loads(request["input"])
+        results = [
+            {"index": criterion["index"], "passed": True, "reason": "Deterministic fake-client sample."}
+            for criterion in payload["criteria"]
+        ]
+        return _FakeJudgeResponse(json.dumps({"criteria": results}))
+
+
+def _dry_interactions(task, repeat, controller_name):
+    interactions = [{"kind": "episode_start", "repeat": repeat}]
+    interactions.append({"kind": "request", "message": task.request})
+    preview_id = f"preview-dry-{task.id}-{controller_name}-{repeat}"
+    for rule in task.required_order:
+        names = rule.get("sequence", [])
+        if names:
+            for name in names:
+                if name == "ask_user":
+                    interactions.append({"kind": "ask_user", "topic": "event", "question": "請確認 synthetic task。"})
+                elif name == "scripted_answer":
+                    if task.scripted_answers:
+                        answer = task.scripted_answers[0]
+                        interactions.append({"kind": "scripted_answer", "message": answer})
+                        interactions.append({"kind": "request", "message": answer})
+                elif name == "preview":
+                    interactions.append({"kind": "preview", "preview_id": preview_id})
+                elif name == "approval":
+                    interactions.append({"kind": "approval", "preview_id": preview_id, "outcome": task.approval})
+                else:
+                    interactions.append({"kind": name})
+        elif rule.get("event"):
+            interactions.append({"kind": rule["event"]})
+    if task.approval and not any(item.get("kind") == "approval" for item in interactions):
+        interactions.extend([
+            {"kind": "preview", "preview_id": preview_id},
+            {"kind": "approval", "preview_id": preview_id, "outcome": task.approval},
+        ])
+    if task.expected_changes and not any(item.get("kind") == "write" for item in interactions):
+        interactions.append({"kind": "write", "action": "synthetic_write"})
+    interactions.append({"kind": "reply", "reply": "合成 dry run：這不是模型產生的回答。"})
+    return interactions
+
+
+def _run_fake_dry_run(tasks, config):
+    episodes = []
+    scored = []
+    judge = _FakeJudge()
+    judge_config = {"model_id": "fake-judge"}
+    for task in tasks:
+        expected_state = normalize_state(_apply_changes(task))
+        for controller_name, repeats in (("agent", 3), ("baseline", 1)):
+            for repeat in range(1, repeats + 1):
+                interactions = _dry_interactions(task, repeat, controller_name)
+                trace = [
+                    {"type": "tool", "name": event.get("action", event["kind"]), "arguments": {}, "result": {"ok": True}}
+                    for event in interactions
+                    if event.get("kind") in {"ask_user", "preview", "write"}
+                ]
+                episode = EpisodeResult(
+                    task_id=task.id,
+                    controller=controller_name,
+                    repeat=repeat,
+                    status="complete",
+                    reply="合成 dry run：這不是模型產生的回答。",
+                    trace=trace,
+                    interactions=interactions,
+                    final_state=expected_state,
+                turns=sum(event.get("kind") in {"ask_user", "reply"} for event in interactions),
+                    model_calls=0,
+                    tool_calls=len(trace),
+                    input_tokens=0,
+                    output_tokens=0,
+                    latency_ms=0,
+                    error=None,
+                )
+                episodes.append(episode)
+                grade = grade_episode(task, episode, judge_client=judge, judge_config=judge_config)
+                scored.append(ScoredEpisode(task, episode, grade))
+    return SuiteResult("complete", episodes), scored
+
+
+def main(argv=None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        raw_config, config, tasks, task_hash, database, output_dir = _preflight(args)
+    except ValueError as exc:
+        print(f"評估未啟動：{exc}", file=sys.stderr)
+        return 2
+
+    metadata = {
+        "run_mode": "dry_run" if args.dry_run else "formal",
+        "task_count": len(tasks),
+        "task_version": config.task_version,
+        "taskset_sha256": task_hash,
+        "dataset_version": raw_config.get("dataset_version"),
+        "fixture_version": raw_config.get("fixture_version"),
+        "controller_model_id": config.model_id,
+        "controller_reasoning_effort": config.reasoning_effort,
+        "judge_model_id": config.judge_model_id,
+        "judge_version": raw_config.get("judge_version"),
+        "tool_version": raw_config.get("tool_version"),
+        "openai_sdk_version": openai.__version__,
+        "planned_controller_episodes": len(tasks) * 4,
+        "planned_judge_calls": len(tasks) * 4,
+    }
+    if database:
+        metadata["database"] = database
+
+    if args.dry_run:
+        suite, results = _run_fake_dry_run(tasks, config)
+        summary = summarize_runs(results)
+        write_run_artifacts(output_dir, suite, results, summary, metadata=metadata)
+        print(f"Fake-client dry run complete; not a live model comparison: {output_dir}")
+        return 0
+
+    from .runner import run_suite
+
+    suite = run_suite(tasks, agent_factory, baseline_factory, config)
+    if suite.status != "complete":
+        write_run_artifacts(output_dir, suite, [], None, metadata=metadata)
+        print(f"評估未完成，已保存 partial episodes：{output_dir}", file=sys.stderr)
+        return 3
+
+    client = openai.OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        base_url=os.environ.get("OPENAI_BASE_URL") or None,
+        max_retries=0,
+        timeout=config.timeout_seconds,
+    )
+    try:
+        results = grade_suite(tasks, suite, judge_client=client, judge_config=config)
+    except JudgeUnavailable as exc:
+        incomplete = SuiteResult("incomplete", suite.episodes, str(exc))
+        write_run_artifacts(output_dir, incomplete, exc.partial_results, None, metadata=metadata)
+        print(f"Judge 中斷，已保存 partial episodes；未產生正式指標：{output_dir}", file=sys.stderr)
+        return 3
+
+    summary = summarize_runs(results)
+    write_run_artifacts(output_dir, suite, results, summary, metadata=metadata)
+    print(f"Evaluation complete: {output_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

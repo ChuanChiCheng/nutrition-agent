@@ -30,6 +30,7 @@
 - 獨立 nutrition-demo-check project 實際 down/up，所有表筆數保持一致。
 - pg_dump custom backup 已於 nutrition-restore-check 新 volume 實際 pg_restore，schema 版本及 profile／inventory／batches／events 等 13 表筆數相同。原始 stdout 包含首次 build 訊息，改以實際 JSON 資料比對確認。
 - CLI 離線互動已實際執行 /inventory、/batches、/daily、/quit，呈現可閱讀結果。
+- 修正提交 `82c6c2a` 的新本機 clone 在未設定 API key 下重新 build、初始化、合成 seed/scripted、讀取資料庫並互動查詢；再 down/up 後 13 表筆數仍相同。
 
 ## 待完成與驗證限制
 

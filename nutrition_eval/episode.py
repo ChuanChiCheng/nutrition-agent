@@ -156,6 +156,7 @@ def run_episode(
         nonlocal total_model_calls, total_tool_calls, input_tokens, output_tokens, turns, latest_reply
         turns += 1
         result_trace = _trace_for(result, store)
+        result_trace = [{**row, "turn": turns} if isinstance(row, dict) else row for row in result_trace]
         trace.extend(result_trace)
         model_count, tool_count = _counts(result, result_trace)
         total_model_calls += model_count
@@ -164,6 +165,46 @@ def run_episode(
         input_tokens += in_count
         output_tokens += out_count
         latest_reply = _reply(result)
+        ask = _explicit_ask_user(result)
+        preview_id = _visible_preview_id(result)
+        ask_recorded = preview_recorded = False
+        for row in result_trace:
+            if not isinstance(row, dict) or row.get("type") not in {"tool", "action"}:
+                continue
+            name = row.get("name")
+            operation = row.get("result")
+            if isinstance(operation, dict) and operation.get("ok") is False:
+                continue
+            if name == "ask_user" and ask and not ask_recorded:
+                interactions.append(
+                    {
+                        "kind": "ask_user",
+                        "topic": ask.get("arguments", {}).get("topic"),
+                        "question": latest_reply,
+                        "turn": turns,
+                        "action": name,
+                    }
+                )
+                ask_recorded = True
+            elif isinstance(name, str) and name.startswith("preview_") and preview_id and not preview_recorded:
+                interactions.append(
+                    {"kind": "preview", "preview_id": preview_id, "turn": turns, "action": name}
+                )
+                preview_recorded = True
+            elif name == "log_meal":
+                interactions.append({"kind": "write", "action": name, "turn": turns})
+        if ask and not ask_recorded:
+            interactions.append(
+                {
+                    "kind": "ask_user",
+                    "topic": ask.get("arguments", {}).get("topic"),
+                    "question": latest_reply,
+                    "turn": turns,
+                    "action": "ask_user",
+                }
+            )
+        if preview_id and not preview_recorded:
+            interactions.append({"kind": "preview", "preview_id": preview_id, "turn": turns})
         interactions.append(
             {
                 "kind": interaction_kind,
@@ -209,14 +250,6 @@ def run_episode(
         ask = _explicit_ask_user(result)
         if ask:
             clarification_count += 1
-            interactions.append(
-                {
-                    "kind": "ask_user",
-                    "topic": ask.get("arguments", {}).get("topic"),
-                    "question": _reply(result),
-                    "turn": turns,
-                }
-            )
             if clarification_count > limits.get("max_clarifications", float("inf")):
                 error = "clarification limit exceeded"
                 break
@@ -224,7 +257,6 @@ def run_episode(
         preview_id = _visible_preview_id(result)
         if preview_id and preview_id != last_preview_id:
             last_preview_id = preview_id
-            interactions.append({"kind": "preview", "preview_id": preview_id, "turn": turns})
             if task.approval and not approval_used:
                 approval_used = True
                 interactions.append(
@@ -253,6 +285,10 @@ def run_episode(
                 )
                 if error:
                     break
+                if task.approval == "approve":
+                    interactions.append(
+                        {"kind": "write", "action": "confirm_preview", "preview_id": preview_id, "turn": turns}
+                    )
 
         if ask and answer_index < len(task.scripted_answers):
             current_message = task.scripted_answers[answer_index]

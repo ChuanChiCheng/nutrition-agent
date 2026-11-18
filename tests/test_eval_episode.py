@@ -164,6 +164,11 @@ def test_approval_waits_for_preview_and_binds_current_id(monkeypatch):
     approved = episode.run_episode(task, preview, FakeStore(), repeat=1, now=make_config().now, limits={})
     assert preview.approvals == [("preview-1", "approve")]
     assert approved.status == "complete"
+    process_kinds = [
+        item["kind"] for item in approved.interactions
+        if item.get("kind") in {"preview", "approval", "write"}
+    ]
+    assert process_kinds == ["preview", "approval", "write"]
 
     mismatched = ScriptedController(
         [controller_result(message="Review preview-1", pending_preview="preview-1")],

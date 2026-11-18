@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -75,6 +75,7 @@ class EpisodeResult:
 class GradePart:
     passed: bool
     reasons: list[str]
+    usage: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,7 @@ class EpisodeGrade:
     state: GradePart
     order: GradePart
     reply: GradePart
+    judge_usage: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

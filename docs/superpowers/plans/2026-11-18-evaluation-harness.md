@@ -155,15 +155,17 @@
 - `grade_episode(task, episode, judge_client, judge_config) -> EpisodeGrade` passes only when state, order and reply all pass. Judge usage is recorded separately and excluded from controller metrics.
 - `grade_suite(tasks: list[EvalTask], suite: SuiteResult, *, judge_client, judge_config) -> list[ScoredEpisode]` grades every episode from a complete suite. A judge outage makes the overall run incomplete; partial grades must not be reported as final accuracy.
 
-- [ ] Write `test_state_grader_rejects_wrong_values_and_unrelated_writes`; assert incorrect stock, extra event/movement and changed unrelated batch each fail.
-- [ ] Write `test_order_grader_rejects_write_before_clarification_or_approval`; assert the valid ask → answer → preview → approval → write order passes.
-- [ ] Write `test_unanswerable_reply_requires_no_invention_and_no_state_change`; assert any invented nutrition claim or new event fails.
-- [ ] Write `test_reply_judge_parses_each_rubric_criterion_and_excludes_usage`; fake judge JSON and verify each criterion contributes to pass and judge tokens remain separate.
-- [ ] Write `test_judge_outage_marks_suite_incomplete_without_final_metrics`; assert partial judge results are not reported as a complete evaluation.
-- [ ] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_grading.py -q`; confirm failures before implementation.
-- [ ] Implement deterministic state/trace grading and the versioned judge adapter; select judge model and exact parameters at implementation time, then freeze them before formal evaluation.
-- [ ] Rerun `tests/test_eval_grading.py -q`; validate the grader against correct and deliberately incorrect fixtures.
-- [ ] Commit `feat: grade evaluation state process and responses`.
+- [x] Write `test_state_grader_rejects_wrong_values_and_unrelated_writes`; assert incorrect stock, extra event/movement and changed unrelated batch each fail.
+- [x] Write `test_order_grader_rejects_write_before_clarification_or_approval`; assert the valid ask → answer → preview → approval → write order passes.
+- [x] Write `test_unanswerable_reply_requires_no_invention_and_no_state_change`; assert any invented nutrition claim or new event fails.
+- [x] Write `test_reply_judge_parses_each_rubric_criterion_and_excludes_usage`; fake judge JSON and verify each criterion contributes to pass and judge tokens remain separate.
+- [x] Write `test_judge_outage_marks_suite_incomplete_without_final_metrics`; assert partial judge results are not reported as a complete evaluation.
+- [x] Run `docker compose --profile test run --build --rm --no-deps --entrypoint uv app run --locked python -m pytest tests/test_eval_grading.py -q`; confirm failures before implementation.
+- [x] Implement deterministic state/trace grading and the versioned judge adapter; select judge model and exact parameters at implementation time, then freeze them before formal evaluation.
+- [x] Rerun `tests/test_eval_grading.py -q`; validate the grader against correct and deliberately incorrect fixtures.
+- [x] Commit `feat: grade evaluation state process and responses`.
+
+**Selected judge settings for Task 6 `eval_config.json`:** `gpt-6.1-terra`, reasoning effort `low`, `max_output_tokens: 1024`, `store: false`, structured response schema, and rubric version `nutrition-reply-judge-v1`. This separates the judge from the `gpt-6-luna` controller model; the formal run remains pending.
 
 ## Task 6: Development Cases and Formal 50-Task Dataset
 

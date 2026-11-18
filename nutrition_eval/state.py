@@ -14,6 +14,11 @@ _VOLATILE_KEYS = {
     "updated_at",
     "confirmed_at",
 }
+_NUMERIC_STRING_KEYS = {
+    "quantity", "delta", "boxes", "total_boxes", "remaining_boxes", "version", "state_version",
+    "kcal", "protein_g", "carbs_g", "fat_g", "container_ml", "reference_quantity",
+    "package_quantity", "usd", "cost", "known_subtotal", "total",
+}
 
 
 def _decimal_text(value: Decimal) -> str:
@@ -43,6 +48,14 @@ def _stable(value: Any, id_maps: dict[str, dict[str, str]] | None = None, key: s
         if value != value or value in (float("inf"), float("-inf")):
             raise ValueError("business state contains a non-finite number")
         return _decimal_text(Decimal(str(value)))
+    if isinstance(value, str) and key in _NUMERIC_STRING_KEYS:
+        try:
+            number = Decimal(value)
+        except InvalidOperation:
+            return value
+        if number.is_finite():
+            return _decimal_text(number)
+        raise ValueError(f"business state contains a non-finite value in {key}")
     if isinstance(value, str) and key:
         mapping_name = {
             "cooking_run_id": "cooking_runs",

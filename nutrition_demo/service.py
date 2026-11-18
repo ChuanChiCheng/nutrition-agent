@@ -387,3 +387,66 @@ class NutritionService:
                   and ('meal' not in query or r['meal']==query['meal'])
                   and ('event_id' not in query or r['id']==query['event_id'])]
             return {'candidates':encode(rows),'needs_clarification':len(rows)!=1}
+
+    def _event(self,c,event_id):
+        row=c.execute('SELECT * FROM events WHERE id=%s',(event_id,)).fetchone()
+        if not row:raise ValueError('Unknown event; search and clarify event identity')
+        return row
+
+    def _addon_deltas(self,old,new):
+        totals=defaultdict(Decimal);snapshots={}
+        for sign,items in ((1,old),(-1,new)):
+            for i in items:
+                id=i['ingredient_id'];snapshots[id]=i
+                totals[id]+=sign*decimal(i['quantity'])
+        return [{'item':snapshots[id],'delta':delta} for id,delta in totals.items() if delta]
+
+    @safe
+    def preview_correction(self,event_id,changes):
+        if not changes or set(changes)-{'date','meal','batch_id','addon_override'}:
+            raise ValueError('No correction or unsupported fields')
+        with self.store.transaction(lock=True) as c:
+            event=self._event(c,event_id);old=event['data'];new=dict(old)
+            if 'date' in changes:new['eaten_on']=self._day(changes['date'])
+            if 'meal' in changes:new['meal']=changes['meal']
+            changing_batch='batch_id' in changes and changes['batch_id']!=old['batch_id']
+            if changing_batch:
+                b=self._batch(c,changes['batch_id'])
+                if b['remaining_boxes']<=0:raise ValueError('No boxes remaining in target batch')
+                new.update({'batch_id':b['id'],'batch_name':b['name'],
+                            'box_nutrients':b['data']['box_nutrients'],'box_sources':b['data']['sources']})
+                plan=self._addons(c,b['id'])
+                new.update({'addon_items':plan['data']['items'],'addon_version':plan['version']})
+            if 'addon_override' in changes:
+                if changes['addon_override'] is None:
+                    plan=self._addons(c,new['batch_id'])
+                    new.update({'addon_items':plan['data']['items'],'addon_version':plan['version']})
+                else:new['addon_items']=self._items(changes['addon_override'])
+            new['addon_nutrients']=encode(sum((n(i['nutrients']) for i in new['addon_items']),ZERO))
+            new['total_nutrients']=encode(n(new['box_nutrients'])+n(new['addon_nutrients']))
+            if new==old:raise ValueError('No changes to event')
+            deltas=self._addon_deltas(old['addon_items'],new['addon_items'])
+            for d in deltas:
+                row=self._stock(c,d['item']['ingredient_id'])
+                if row['quantity']+d['delta']<0:raise ValueError('needs_clarification: insufficient corrected addon inventory')
+            detail=[{'before_event':old,'after_event':new}]
+            if changing_batch:detail.append({'restore_box_to':old['batch_id'],'consume_box_from':new['batch_id']})
+            detail += [{'ingredient_id':d['item']['ingredient_id'],'inventory_delta':d['delta'],
+                        'unit':d['item']['unit']} for d in deltas]
+            return self._preview(c,'correction',{'event_id':event_id,'old':old,'new':new,'inventory_deltas':deltas},
+                                 detail,'核對日期、餐點、加餐、營養與庫存差額後，再確認更正。')
+
+    def _apply_correction(self,c,payload):
+        event=self._event(c,payload['event_id']);old=payload['old'];new=payload['new']
+        if event['data']!=old:raise ValueError('Event changed; regenerate preview')
+        if old['batch_id']!=new['batch_id']:
+            b=self._batch(c,new['batch_id'])
+            if b['remaining_boxes']<=0:raise ValueError('No boxes remaining in target batch')
+            c.execute('UPDATE batches SET remaining_boxes=remaining_boxes+1 WHERE id=%s',(old['batch_id'],))
+            c.execute('UPDATE batches SET remaining_boxes=remaining_boxes-1 WHERE id=%s',(new['batch_id'],))
+        for d in payload['inventory_deltas']:
+            self._move(c,d['item'],d['delta'],'correction',event=event['id'])
+        new={**new,'history':old.get('history',[])+[{'snapshot':{k:v for k,v in old.items() if k!='history'},'corrected_at':self.clock()}]}
+        c.execute('UPDATE events SET batch_id=%s,eaten_on=%s,meal=%s,data=%s WHERE id=%s',
+                  (new['batch_id'],new['eaten_on'],new['meal'],jsonb(new),event['id']))
+        return {'event_id':event['id'],'event':new}

@@ -208,3 +208,5 @@
 ## Formal Run Handoff
 
 After implementation and review, freeze exact model/SDK/settings, task and fixture versions, tool contract and judge. Run the 50-task comparison using the test database and generate the requested results. Select one observed failed episode and write the one-paragraph failure analysis from its preserved trace. If no live controller failure occurs, report that fact rather than inventing one. The 11/17 take-home deadline has passed; confirm later course expectations before describing a late submission as accepted.
+
+**Status:** Harness implementation, fake-client dry run and automated verification are complete. The live 50-task comparison remains pending because it uses paid model calls and is outside the currently authorized scope.

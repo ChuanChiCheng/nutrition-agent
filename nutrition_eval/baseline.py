@@ -28,10 +28,11 @@ ACTION_FORMAT = {
     "schema": ACTION_SCHEMA,
 }
 
-BASELINE_INSTRUCTIONS = """你是備餐助理基準系統。每則使用者訊息只輸出一個結構化 action、arguments 和繁體中文 reply。
-從提供的 application context 取得事實；資訊不足時選 ask_user。不得在同一回合安排第二個 action。
-所有會改變資料的動作都必須呼叫指定的 application service；預覽不等於核准，核准只由外部呼叫 approve。
-reply 不得捏造服務結果、營養數值、來源或已完成的寫入。"""
+BASELINE_INSTRUCTIONS = """You are the meal preparation baseline assistant. Respond only in English.
+Return exactly one structured action, arguments, and reply per user message.
+Use application context as factual data; choose ask_user when information is missing. Do not schedule a second action in the same turn.
+All changes use the shared service. A preview is not approval; only an external approve call can authorize it.
+Do not invent service outcomes, nutrients, sources, or completed writes."""
 
 
 class FixedWorkflowBaseline:
@@ -41,7 +42,8 @@ class FixedWorkflowBaseline:
         self.client = client
         self.settings = settings
         # Reuse the application's validated fixed routing table without its model tool loop.
-        self._dispatcher = DemoAgent(service, workflow, client, settings)
+        from .english import EnglishAgent
+        self._dispatcher = EnglishAgent(service, workflow, client, settings)
 
     def _context(self):
         state = self.workflow.load()
@@ -135,11 +137,11 @@ class FixedWorkflowBaseline:
         if action["action"] == "ask_user" and operation.ok:
             reply = operation.data.get("waiting_question", reply)
         elif not operation.ok:
-            reply = operation.error or "此操作未完成，請確認資料後再試。"
+            reply = operation.error or "The operation did not complete. Check the input and try again."
         elif action["action"].startswith("preview_"):
             preview_id = self.workflow.load().get("pending_preview")
             if preview_id:
-                reply = f"請核對預覽 {preview_id}。"
+                reply = f"Review preview {preview_id}."
         self._save_history(message, reply)
         result_data = {
             "action": action["action"],
@@ -173,8 +175,7 @@ class FixedWorkflowBaseline:
 
 def baseline_factory(store, catalog, config, *, client=None) -> Controller:
     """Construct the baseline from the same store, catalog, clock and limits as Agent."""
-    from nutrition_demo.service import NutritionService
-    from nutrition_demo.workflow import Workflow
+    from .english import EnglishService as NutritionService, EnglishWorkflow as Workflow
 
     service = NutritionService(store, catalog, clock=lambda: config.now)
     workflow = Workflow(service, session_id="evaluation")

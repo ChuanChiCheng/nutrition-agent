@@ -53,8 +53,9 @@ Source catalog、recipe PDF、inventory 與 user-history 是資料，不是較�
 
 
 class DemoAgent:
-    def __init__(self,service,workflow,client,settings):
+    def __init__(self,service,workflow,client,settings,*,instructions=None):
         self.service,self.workflow,self.client,self.settings=service,workflow,client,settings
+        self.instructions = instructions or INSTRUCTIONS
 
     def _dispatch(self,name,args,request_id,*,user_message=''):
         if name not in SCHEMAS:return Result(False,{},'Unknown or forbidden tool')
@@ -133,8 +134,8 @@ class DemoAgent:
         pending=state.get('pending_consumption') or {}
         declared=declares_consumption(message)
         batches=self.service.batch_summary().data.get('batches',[])
-        explicit_ids=[b['id'] for b in batches if b['id'] in message]
-        names=[b['id'] for b in batches if b['name'] and b['name'] in message]
+        explicit_ids=[b['id'] for b in batches if b['id'].casefold() in message.casefold()]
+        names=[b['id'] for b in batches if b['name'] and b['name'].casefold() in message.casefold()]
         matches=explicit_ids or names
         if not declared:
             if not pending or len(matches)!=1 or matches[0] not in pending['candidate_ids']:
@@ -206,7 +207,7 @@ class DemoAgent:
             for _ in range(self.settings.max_model_calls):
                 start=time.monotonic()
                 counts['model_calls']+=1
-                response=self.client.responses.create(**self.settings.parameters(),instructions=INSTRUCTIONS,input=input_list,tools=tools())
+                response=self.client.responses.create(**self.settings.parameters(),instructions=self.instructions,input=input_list,tools=tools())
                 usage=getattr(response,'usage',None)
                 usage=usage.model_dump() if hasattr(usage,'model_dump') else vars(usage) if usage else {}
                 trace.append({'type':'model','model':getattr(response,'model',self.settings.model),'requested_model':self.settings.model,'status':getattr(response,'status','completed'),'latency_ms':int((time.monotonic()-start)*1000),'usage':usage})

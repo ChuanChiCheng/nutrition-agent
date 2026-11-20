@@ -81,31 +81,31 @@ def _load_config(path: Path) -> tuple[dict, EvalConfig]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"無法讀取評估設定檔：{exc}") from exc
+        raise ValueError(f"Cannot read evaluation config: {exc}") from exc
     if not isinstance(raw, dict):
-        raise ValueError("評估設定檔必須是 JSON object")
+        raise ValueError("Evaluation config must be a JSON object")
     if _contains_secret_setting(raw):
-        raise ValueError("評估設定檔不可包含 API key 或資料庫連線密碼")
+        raise ValueError("Evaluation config must not contain API keys or database credentials")
     if raw.get("judge_version") != JUDGE_VERSION:
-        raise ValueError(f"judge 版本不符：預期 {JUDGE_VERSION}")
+        raise ValueError(f"Judge version mismatch; expected {JUDGE_VERSION}")
     if raw.get("tool_version") != TOOL_VERSION:
-        raise ValueError(f"工具版本不符：預期 {TOOL_VERSION}")
+        raise ValueError(f"Tool version mismatch; expected {TOOL_VERSION}")
     if raw.get("openai_sdk_version") != openai.__version__:
         raise ValueError(
-            f"OpenAI SDK 版本不符：設定為 {raw.get('openai_sdk_version')}，執行環境為 {openai.__version__}"
+            f"OpenAI SDK mismatch; configured {raw.get('openai_sdk_version')}; installed {openai.__version__}"
         )
     if raw.get("judge_store") is not False:
-        raise ValueError("judge 必須設定 store=false")
+        raise ValueError("Judge requires store=false")
     migrations = _database_migration_manifest()
     if not migrations or raw.get("database_migrations") != migrations:
-        raise ValueError("資料庫 migration 版本或 checksum 與凍結設定不符")
+        raise ValueError("Database migration manifest does not match frozen config")
     if raw.get("database_migration_version") != migrations[-1]["version"]:
-        raise ValueError("database_migration_version 與目前 migration manifest 不符")
+        raise ValueError("database_migration_version does not match the migration manifest")
     expected_instructions_hash = sha256(JUDGE_INSTRUCTIONS.encode("utf-8")).hexdigest()
     if raw.get("judge_instructions_sha256") != expected_instructions_hash:
-        raise ValueError("judge prompt SHA-256 與凍結設定不符")
+        raise ValueError("Judge prompt hash does not match frozen config")
     if raw.get("judge_schema_sha256") != _judge_schema_sha256():
-        raise ValueError("judge schema SHA-256 與凍結設定不符")
+        raise ValueError("Judge schema hash does not match frozen config")
     try:
         now = datetime.fromisoformat(raw["now"])
         config = EvalConfig(
@@ -122,22 +122,22 @@ def _load_config(path: Path) -> tuple[dict, EvalConfig]:
             task_version=raw["task_version"],
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(f"評估設定欄位不完整或格式錯誤：{exc}") from exc
+        raise ValueError(f"Invalid or missing evaluation config fields: {exc}") from exc
     if now.tzinfo is None or raw.get("timezone") != "America/Los_Angeles":
-        raise ValueError("固定時鐘必須包含時區，且設定時區必須是 America/Los_Angeles")
+        raise ValueError("Fixed clock must have a timezone and use America/Los_Angeles")
     return raw, config
 
 
 def _validate_test_database() -> dict:
     dsn = os.environ.get("TEST_DATABASE_URL")
     if not dsn:
-        raise ValueError("缺少 TEST_DATABASE_URL；不會改用個人資料庫")
+        raise ValueError("TEST_DATABASE_URL is required; no personal database fallback")
     try:
         target = conninfo_to_dict(dsn)
     except (TypeError, ValueError) as exc:
-        raise ValueError("TEST_DATABASE_URL 格式無效") from exc
+        raise ValueError("Invalid TEST_DATABASE_URL") from exc
     if target.get("host") != "db_test" or target.get("dbname") != "nutrition_test":
-        raise ValueError("只允許連到 db_test/nutrition_test 測試資料庫")
+        raise ValueError("Only db_test/nutrition_test is allowed")
     personal_dsn = os.environ.get("DATABASE_URL")
     if personal_dsn:
         try:
@@ -145,7 +145,7 @@ def _validate_test_database() -> dict:
         except (TypeError, ValueError):
             personal = {}
         if personal and (personal.get("host"), personal.get("dbname")) == (target.get("host"), target.get("dbname")):
-            raise ValueError("TEST_DATABASE_URL 與 DATABASE_URL 指向同一資料庫，拒絕啟動")
+            raise ValueError("TEST_DATABASE_URL points to the personal DATABASE_URL; refusing to start")
     return {"host": target.get("host"), "dbname": target.get("dbname")}
 
 
@@ -155,22 +155,22 @@ def _preflight(args):
     task_hash = sha256(args.tasks.read_bytes()).hexdigest()
     if args.dry_run:
         if not 3 <= len(tasks) <= 5 or not all(task.id.startswith("D") for task in tasks):
-            raise ValueError("fake-client dry run 僅接受 3–5 題 development_tasks.jsonl")
+            raise ValueError("Fake-client dry run requires 3–5 development tasks")
         database = None
     else:
         validate_taskset(tasks, expected_count=50)
         if task_hash != raw_config.get("formal_taskset_sha256"):
-            raise ValueError("正式題庫 SHA-256 與 eval_config.json 不符；請先重新核對並凍結版本")
+            raise ValueError("Formal taskset hash does not match eval_config.json; verify and freeze the version first")
         program_commit = os.environ.get("EVAL_PROGRAM_COMMIT", "")
         if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", program_commit):
-            raise ValueError("正式評估需要 EVAL_PROGRAM_COMMIT（40 或 64 字元的 Git commit SHA）")
+            raise ValueError("Formal evaluation requires EVAL_PROGRAM_COMMIT (40 or 64 hexadecimal characters)")
         database = _validate_test_database()
         if not os.environ.get("OPENAI_API_KEY"):
-            raise ValueError("正式評估需要 OPENAI_API_KEY；未設定時不會啟動 controller")
+            raise ValueError("Formal evaluation requires OPENAI_API_KEY before controllers start")
     program_commit = os.environ.get("EVAL_PROGRAM_COMMIT") or None
     output_dir = Path(args.output)
     if output_dir.exists() and any(output_dir.iterdir()):
-        raise ValueError(f"輸出目錄已存在且非空：{output_dir}")
+        raise ValueError(f"Output directory is not empty: {output_dir}")
     config_hash = sha256(args.config.read_bytes()).hexdigest()
     return raw_config, config, tasks, task_hash, database, output_dir, config_hash, program_commit
 
@@ -210,7 +210,7 @@ def _dry_interactions(task, repeat, controller_name):
         if names:
             for name in names:
                 if name == "ask_user":
-                    interactions.append({"kind": "ask_user", "topic": "event", "question": "請確認 synthetic task。"})
+                    interactions.append({"kind": "ask_user", "topic": "event", "question": "Please clarify the synthetic task."})
                 elif name == "scripted_answer":
                     if task.scripted_answers:
                         answer = task.scripted_answers[0]
@@ -231,7 +231,7 @@ def _dry_interactions(task, repeat, controller_name):
         ])
     if task.expected_changes and not any(item.get("kind") == "write" for item in interactions):
         interactions.append({"kind": "write", "action": "synthetic_write"})
-    interactions.append({"kind": "reply", "reply": "合成 dry run：這不是模型產生的回答。"})
+    interactions.append({"kind": "reply", "reply": "Synthetic dry run: this response was not generated by a model."})
     return interactions
 
 
@@ -255,7 +255,7 @@ def _run_fake_dry_run(tasks, config):
                     controller=controller_name,
                     repeat=repeat,
                     status="complete",
-                    reply="合成 dry run：這不是模型產生的回答。",
+                    reply="Synthetic dry run: this response was not generated by a model.",
                     trace=trace,
                     interactions=interactions,
                     final_state=expected_state,
@@ -278,7 +278,7 @@ def main(argv=None) -> int:
     try:
         raw_config, config, tasks, task_hash, database, output_dir, config_hash, program_commit = _preflight(args)
     except ValueError as exc:
-        print(f"評估未啟動：{exc}", file=sys.stderr)
+        print(f"Evaluation did not start: {exc}", file=sys.stderr)
         return 2
 
     metadata = {
@@ -331,7 +331,7 @@ def main(argv=None) -> int:
     suite = run_suite(tasks, agent_factory, baseline_factory, config)
     if suite.status != "complete":
         write_run_artifacts(output_dir, suite, [], None, metadata=metadata)
-        print(f"評估未完成，已保存 partial episodes：{output_dir}", file=sys.stderr)
+        print(f"Evaluation incomplete; partial episodes saved: {output_dir}", file=sys.stderr)
         return 3
 
     client = openai.OpenAI(
@@ -345,7 +345,7 @@ def main(argv=None) -> int:
     except JudgeUnavailable as exc:
         incomplete = SuiteResult("incomplete", suite.episodes, str(exc))
         write_run_artifacts(output_dir, incomplete, exc.partial_results, None, metadata=metadata)
-        print(f"Judge 中斷，已保存 partial episodes；未產生正式指標：{output_dir}", file=sys.stderr)
+        print(f"Judge interrupted; partial episodes saved without final metrics: {output_dir}", file=sys.stderr)
         return 3
 
     summary = summarize_runs(results)

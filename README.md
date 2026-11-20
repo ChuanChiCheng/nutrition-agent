@@ -89,30 +89,32 @@ docker compose --profile test run --rm --no-deps --entrypoint uv app run --locke
 
 ## Evaluation harness
 
-`development_tasks.jsonl` 有四題開發案例，與正式題庫分開。`tasks.jsonl` 恰含 50 題，分類數為 nutrition 10、preparation 8、addons 7、meal logging 8、corrections 10、queries 5、unanswerable 2；其中五題標記 edge。每題使用明確標記的合成 fixture。`eval_config.json` 固定 Los Angeles 時鐘、模型／推理設定、SDK、工具、judge 與題庫 SHA-256，不含 API key。
+The entire evaluation path uses English: task requests, fixtures, scripted answers, rubrics, controller instructions, application responses, and reports. The English adapters use the shared business operations and preserve confirmation requirements.
 
-先用假 controller 和 judge 檢查資料格式與報表，不需要 API key 或資料庫：
+`development_tasks.jsonl` contains four development cases. `tasks.jsonl` contains exactly 50 formal cases: nutrition 10, preparation 8, addons 7, meal logging 8, corrections 10, queries 5, and unanswerable 2. Five cases carry an edge label. All fixtures are synthetic. `eval_config.json` freezes the application clock, model settings, versions, and dataset hash; `language_revision` identifies this English revision.
+
+Run a fake-client demonstration without a model call or database:
 
 ```bash
 mkdir -p results
-docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --entrypoint uv app run --locked python -m nutrition_eval --tasks development_tasks.jsonl --config eval_config.json --output results/dev-dry-run --dry-run
+docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --entrypoint uv app run --locked python -m nutrition_eval --tasks development_tasks.jsonl --config eval_config.json --output results/dev-english-v1 --dry-run
 ```
 
-這只產生固定的合成樣本，不會呼叫模型，因此不能當作 Agent 與 baseline 的實際比較。
+This generates deterministic synthetic samples and is not a live model comparison.
 
-正式評估會呼叫模型服務，先啟動隔離的測試資料庫，並確認 `.env` 已設定 `OPENAI_API_KEY`：
+A formal run uses paid model calls and the isolated test database:
 
 ```bash
 docker compose --profile test up -d --wait db_test
 mkdir -p results
-docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --env "EVAL_PROGRAM_COMMIT=$(git rev-parse HEAD)" --entrypoint uv app run --locked python -m nutrition_eval --tasks tasks.jsonl --config eval_config.json --output results/formal-50-v1
+docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:/app/results" --env "EVAL_PROGRAM_COMMIT=$(git rev-parse HEAD)" --entrypoint uv app run --locked python -m nutrition_eval --tasks tasks.jsonl --config eval_config.json --output results/formal-50-english-v1
 ```
 
-`results` 資料夾掛載到容器後，報表會保留在專案目錄。正式指令會把目前 Git commit 傳給評估程式；CLI 會在啟動 controller 前檢查正式題庫、凍結 hash、程式 commit 與 `db_test/nutrition_test` 連線，不會讀取或退回日常 `DATABASE_URL`。每題 Agent 從乾淨 schema 跑三次，baseline 跑一次，總共 200 個 controller episodes；judge 逐一評分文字回答。若 controller 基礎設施或 judge 中斷，輸出會保留 partial episodes 和錯誤，但不產生正式 summary 指標。
+Preflight verifies the task hash, program revision, migration manifest, and `db_test/nutrition_test` connection. It never falls back to the personal database. Agent runs each task three times and baseline once, producing 200 episodes. Judge interruption preserves partial records and marks the run incomplete without final aggregate metrics.
 
-每個 run 目錄包含 `episodes.jsonl` 原始 trace、互動、狀態、逐題 grade 與模型／工具／fixture 版本；`status.json` 記錄 run 完整性、程式 commit 與 source hash、完整凍結設定、migration checksum、judge prompt/schema 及其 hash、資源上限；完整 run 另有 `summary.md`、`failure_trace.md` 和一段 `failure_analysis.md`。Summary 列出 Agent 150 筆與 baseline 50 筆的 accuracy、平均 turns、model calls、latency、nearest-rank p95、tokens、pass@3、pass^3 和翻轉題號。
+Artifacts include `episodes.jsonl`, `status.json`, and, for complete runs, `summary.md`, `failure_trace.md`, and `failure_analysis.md`. Metadata preserves the source/config hashes, frozen settings, migration checksums, judge prompt/schema, and resource limits. The report compares accuracy, turns, model calls, mean and nearest-rank p95 latency, tokens, pass@3, pass^3, and flipped task IDs.
 
-正式 50 題是目前這個課程評估範圍。之後的 200+ 題 benchmark 與獨立 safety suite 是不同資料集，不會併入本次 accuracy。
+The later 200+ task benchmark and independent safety suite are separate datasets. The formal live comparison remains pending.
 
 ## 重開、備份與還原
 

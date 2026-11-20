@@ -17,6 +17,7 @@ from nutrition_demo.tools import TOOL_VERSION
 from .contracts import EpisodeResult, EvalConfig, ScoredEpisode, SuiteResult
 from .controllers import agent_factory
 from .baseline import baseline_factory
+from .episode import RESPONSE_CAPTURE_VERSION
 from .grading import JudgeUnavailable, _apply_changes, grade_episode, grade_suite
 from .judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA, JUDGE_VERSION
 from .report import summarize_runs, write_run_artifacts
@@ -86,6 +87,8 @@ def _load_config(path: Path) -> tuple[dict, EvalConfig]:
         raise ValueError("Evaluation config must be a JSON object")
     if _contains_secret_setting(raw):
         raise ValueError("Evaluation config must not contain API keys or database credentials")
+    if raw.get("response_capture_version") != RESPONSE_CAPTURE_VERSION:
+        raise ValueError("Response capture version does not match frozen config")
     if raw.get("judge_version") != JUDGE_VERSION:
         raise ValueError(f"Judge version mismatch; expected {JUDGE_VERSION}")
     if raw.get("tool_version") != TOOL_VERSION:
@@ -297,6 +300,7 @@ def main(argv=None) -> int:
         "judge_model_id": config.judge_model_id,
         "judge_parameters": dict(config.judge_parameters),
         "judge_version": raw_config.get("judge_version"),
+        "response_capture_version": RESPONSE_CAPTURE_VERSION,
         "judge_instructions": JUDGE_INSTRUCTIONS,
         "judge_schema": JUDGE_SCHEMA,
         "judge_instructions_sha256": raw_config["judge_instructions_sha256"],

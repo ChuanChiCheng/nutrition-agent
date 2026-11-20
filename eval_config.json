@@ -15,7 +15,7 @@
     "max_output_tokens": 1024
   },
   "judge_store": false,
-  "judge_version": "nutrition-reply-judge-v1",
+  "judge_version": "nutrition-reply-judge-v2",
   "dataset_version": "nutrition-eval-50-v1",
   "formal_taskset_sha256": "f23c1eb794c59b5019585de7df29f652c94ae6d50089af20470fd15dcedf7a9f",
   "task_version": "nutrition-eval-50-v1",
@@ -33,5 +33,6 @@
   "judge_instructions_sha256": "c2f0050339f7047bc9ede033a2964c4158b5a99e744c8550eb089bdda210c1b7",
   "judge_schema_sha256": "05f933dac3429a791546405a8c0fa049ac1b7debec833e6e4a93a088013199c5",
   "evaluation_language": "en",
-  "language_revision": "english-v1"
+  "language_revision": "english-v1",
+  "response_capture_version": "terminal-render-v1"
 }

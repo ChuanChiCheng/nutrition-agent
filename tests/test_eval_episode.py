@@ -358,3 +358,59 @@ def test_controller_failure_is_failed_episode_but_setup_error_incompletes_suite(
     assert incomplete.status == "incomplete"
     assert incomplete.episodes == []
     assert observations == []
+
+
+def test_capture_matches_terminal_render_for_structured_result_and_error():
+    from nutrition_demo.display import render
+    from nutrition_eval.episode import _reply
+
+    values = [
+        Result(True, {'rejected':'preview-1'}),
+        Result(True, {'updated_inventory':True}),
+        Result(True, {'message':'Service results follow.', 'tool_results':[
+            {'name':'get_profile','result':{'ok':True,'data':{
+                'meal_targets':dict(kcal=600,protein_g=40,carbs_g=65,fat_g=20),
+                'daily_targets':dict(kcal=1800,protein_g=120,carbs_g=195,fat_g=60),
+                'timezone':'America/Los_Angeles'}}}]}),
+        Result(False, {}, 'Invalid quantity'),
+    ]
+    for result in values:
+        assert _reply(result) == render(result)
+
+
+def test_p01_rejection_preserves_rendered_preview_and_confirmation_for_judge(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from nutrition_demo.display import render
+    from nutrition_eval import episode
+    from nutrition_eval.judge import grade_reply
+
+    monkeypatch.setattr(episode,'read_business_state',lambda store: {})
+    monkeypatch.setattr(episode,'normalize_state',lambda state: state)
+    preview = Result(True, {'id':'preview-p01','kind':'preparation',
+        'pending_preview':'preview-p01',
+        'summary':'Prepare 5 boxes using 300 g chicken and 150 g rice.',
+        'changes':[], 'message':'Review preview-p01.'})
+    rejection = Result(True, {'rejected':'preview-p01'})
+
+    class Controller:
+        def handle(self, message): return preview
+        def approve(self, preview_id, outcome):
+            assert (preview_id,outcome)==('preview-p01','reject')
+            return rejection
+
+    result = episode.run_episode(make_task(approval='reject',reply_rubric=['Explain the preview and respect rejection.']),
+        Controller(),FakeStore(),repeat=1,now=make_config().now,limits={})
+    assert result.reply == render(rejection)
+    assert result.status == 'complete'
+    assert [x['reply'] for x in result.interactions if x['kind'] in {'reply','approval_result'}] == [render(preview),render(rejection)]
+
+    class Judge:
+        def create(self, **request):
+            payload=json.loads(request['input'])
+            replies=[x['reply'] for x in payload['conversation'] if x['kind'] in {'reply','approval_result'}]
+            assert replies == [render(preview),render(rejection)]
+            return SimpleNamespace(status='completed',output_text=json.dumps({'criteria':[{'index':0,'passed':True,'reason':'Full displayed exchange received.'}]}),usage=None)
+    grade = grade_reply(make_task(reply_rubric=['Explain the preview and respect rejection.']),result,
+        judge_client=SimpleNamespace(responses=Judge()),judge_config={'model_id':'fake'})
+    assert grade.passed

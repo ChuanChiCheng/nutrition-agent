@@ -6,6 +6,9 @@ from .contracts import EpisodeResult, EvalTask
 from .state import normalize_state, read_business_state
 
 
+RESPONSE_CAPTURE_VERSION = "terminal-render-v1"
+
+
 def _data(result) -> dict:
     value = getattr(result, "data", {})
     return value if isinstance(value, dict) else {}
@@ -77,13 +80,10 @@ def _visible_preview_id(result) -> str | None:
 
 
 def _reply(result) -> str | None:
-    data = _data(result)
-    for key in ("message", "reply"):
-        value = data.get(key)
-        if isinstance(value, str) and value:
-            return value
-    error = getattr(result, "error", None)
-    return error if isinstance(error, str) and error else None
+    # Grade the exact terminal presentation, including structured service results.
+    from nutrition_demo.display import render
+
+    return render(result)
 
 
 def _usage(trace: list[dict]) -> tuple[int, int]:

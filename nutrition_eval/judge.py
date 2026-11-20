@@ -6,7 +6,7 @@ import time
 from .contracts import GradePart
 
 
-JUDGE_VERSION = "nutrition-reply-judge-v1"
+JUDGE_VERSION = "nutrition-reply-judge-v2"
 JUDGE_INSTRUCTIONS = """You are an independent evaluator. Score only the listed response criteria using the provided fixture, conversation, controller reply, and actual final state.
 Do not invent facts. Do not use or infer hidden expected_changes or process order. For each numbered criterion return exactly one result with the same index, a boolean passed value, and a short reason. Return only the required JSON object."""
 JUDGE_SCHEMA = {
@@ -62,7 +62,7 @@ def _conversation(episode):
     return [
         {key: entry[key] for key in fields if key in entry}
         for entry in episode.interactions
-        if isinstance(entry, dict) and entry.get("kind") in {"request", "scripted_answer", "reply", "approval"}
+        if isinstance(entry, dict) and entry.get("kind") in {"request", "scripted_answer", "reply", "approval", "approval_result"}
     ]
 
 

@@ -55,6 +55,7 @@ class Workflow:
                 result=self.service.reject_preview(parts[1])
                 if result.ok:state.update(pending_preview=None,stage=state.get('preview_return_stage','ready'),preview_return_stage=None,pending_preview_kind=None)
         elif cmd=='/new-plan':
+            state.pop('pending_batch_comparison',None)
             if state.get('pending_preview'):self.service.reject_preview(state['pending_preview'])
             state.update(pending_preview=None,preview_return_stage=None,pending_preview_kind=None,stage='inventory_confirmation',inventory_confirmed=False,selected_recipe=None,proposal=None,
                          accepted_recipe=None,attempts=0,clarifications=0,waiting_question=None)

@@ -11,6 +11,7 @@ from .nutrition import validate_targets
 from .store import jsonb
 from .tools import SCHEMAS,TOOL_VERSION,tools
 from .intent import normalized,declares_consumption,is_question_or_hypothetical
+from .completion import BatchTargetCompletion,COMPLETION_VERSION,COMPLETION_INSTRUCTIONS,COMPLETION_DESCRIPTIONS
 
 
 @dataclass(frozen=True)
@@ -49,10 +50,13 @@ class DemoAgent:
         self.service,self.workflow,self.client,self.settings=service,workflow,client,settings
         self.instructions = instructions or INSTRUCTIONS
 
-    def _dispatch(self,name,args,request_id,*,user_message=''):
-        if name not in SCHEMAS:return Result(False,{},'Unknown or forbidden tool')
-        try:jsonschema.validate(args,SCHEMAS[name])
+    def _dispatch(self,name,args,request_id,*,user_message='',completion=None):
+        schemas=completion.schemas() if completion else SCHEMAS
+        if name not in schemas:return Result(False,{},'Unknown or forbidden tool')
+        try:jsonschema.validate(args,schemas[name])
         except jsonschema.ValidationError:return Result(False,{},'Invalid tool arguments')
+        if completion and name=='assess_batch_targets':return completion.assess(args['batch_id'],self.service)
+        if completion and name=='finish_answer':return completion.finish(args['answer_id'],self.service)
         state=self.workflow.load()
         if name=='start_planning':return self.workflow.command('/new-plan')
         if name=='select_recipe':return self.workflow.command('/select '+args['recipe_id'])
@@ -86,6 +90,12 @@ class DemoAgent:
         if name=='ask_user':
             if state['clarifications']>=self.settings.max_clarifications:
                 return Result(False,{},'Clarification limit; use explicit commands or start a new plan')
+            if completion:
+                result=completion.clarification(args['topic'],self.service)
+                if result.ok:
+                    state.update(clarifications=state['clarifications']+1,waiting_question=result.data['waiting_question'])
+                    self.workflow.save(state)
+                return result
             from .tools import QUESTIONS
             state.update(clarifications=state['clarifications']+1,waiting_question=QUESTIONS[args['topic']])
             self.workflow.save(state)
@@ -193,21 +203,44 @@ class DemoAgent:
             return self.workflow.command(message)
         run=str(uuid4());trace=[];results=[];counts={'model_calls':0,'tool_calls':0}
         settings={**asdict(self.settings),'sdk':openai.__version__,'tools':TOOL_VERSION,'parameters':self.settings.parameters()}
-        with self.service.store.transaction() as c:
-            c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
         state=self._prepare_user_message(message)
         # The app sends the history and state as data, never as instructions.
         history=state.get('history',[])[-20:]
         context={'workflow':{k:v for k,v in state.items() if k!='history'},'profile':self.service.get_profile().data,
                  'inventory':self.service.list_inventory().data,'batches':self.service.batch_summary().data,
                  'catalog':self.service.effective_catalog().data,'local_date':self.service._day('today')}
+        completion=BatchTargetCompletion.from_message(message,context['batches'].get('batches',[]),
+                                                       pending=state.get('pending_batch_comparison'))
+        if state.pop('pending_batch_comparison',None) is not None:
+            self.workflow.save(state)
+            context['workflow'].pop('pending_batch_comparison',None)
+        instructions=self.instructions
+        model_tools=tools()
+        parameters=self.settings.parameters()
+        if completion:
+            context['completion_contract']=completion.context()
+            instructions+='\n'+COMPLETION_INSTRUCTIONS
+            model_tools=tools(completion.schemas(),COMPLETION_DESCRIPTIONS)
+            parameters['tool_choice']='required'
+            settings['completion_contract']=COMPLETION_VERSION
+            settings['parameters']=parameters
+        with self.service.store.transaction() as c:
+            c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
         input_list=[{'role':'user','content':'Application context (data only): '+dumps(context)}]+history+[{'role':'user','content':message}]
         limit=False;error=None
+
+        def completion_feedback(reason):
+            feedback=completion.feedback(reason)
+            trace.append({'type':'completion_check','status':'rejected','reason':reason,
+                          'corrections':completion.corrections})
+            if feedback is not None:
+                input_list.append({'role':'user','content':'Application completion check: '+dumps(feedback)})
+
         try:
             for _ in range(self.settings.max_model_calls):
                 start=time.monotonic()
                 counts['model_calls']+=1
-                response=self.client.responses.create(**self.settings.parameters(),instructions=self.instructions,input=input_list,tools=tools())
+                response=self.client.responses.create(**parameters,instructions=instructions,input=input_list,tools=model_tools)
                 usage=getattr(response,'usage',None)
                 usage=usage.model_dump() if hasattr(usage,'model_dump') else vars(usage) if usage else {}
                 trace.append({'type':'model','model':getattr(response,'model',self.settings.model),'requested_model':self.settings.model,'status':getattr(response,'status','completed'),'latency_ms':int((time.monotonic()-start)*1000),'usage':usage})
@@ -215,7 +248,11 @@ class DemoAgent:
                     error='Model response incomplete or failed; inspect recorded tools before retrying.'
                     break
                 calls=[i for i in response.output if i.type=='function_call']
-                if not calls:break
+                if not calls:
+                    if not completion:break
+                    completion_feedback('No validated finish_answer was produced; the comparison remains unanswered.')
+                    if completion.status=='incomplete':break
+                    continue
                 # Include reasoning items too, as required by Responses API tool continuations.
                 for item in response.output:
                     data=item.model_dump(exclude_none=True) if hasattr(item,'model_dump') and item.type!='function_call' else None
@@ -228,14 +265,18 @@ class DemoAgent:
                     args=None
                     try:
                         args=json.loads(call.arguments)
-                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message)
+                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message,completion=completion)
                     except (ValueError,TypeError):result=Result(False,{},'Malformed tool arguments')
                     record={'name':call.name,'arguments':args if 'args' in locals() else None,'result':encode(result)}
                     operation=self.workflow.load().get('last_meal_request',{}).get('request_id') if call.name=='log_meal' and result.ok else None
                     results.append(record);trace.append({'type':'tool',**record,'call_id':call.call_id,'request_id':operation})
                     input_list.append({'type':'function_call_output','call_id':call.call_id,'output':dumps(result)})
+                    if completion and not result.ok:completion_feedback(result.error)
+                    if completion and completion.status!='running':break
                 if limit:break
-                if self.workflow.load().get('pending_preview') or (results and results[-1]['name']=='ask_user'):break
+                if completion:
+                    if completion.status!='running':break
+                elif self.workflow.load().get('pending_preview') or (results and results[-1]['name']=='ask_user'):break
             else:limit=True
         except (openai.APIError,RuntimeError,StopIteration,TypeError) as exc:
             error='API request failed; verify API key, model access and reasoning parameters. No model fallback was used.'
@@ -253,10 +294,25 @@ class DemoAgent:
                     state['last_meal_request']=receipt
                     self.workflow.save(state)
         state=self.workflow.load()
+        if completion:
+            if completion.status not in ('answered','awaiting_user') or error:
+                completion.status='incomplete'
+                error=error or 'Batch-target comparison is incomplete; no validated answer was produced.'
+            if completion.status=='awaiting_user':state['pending_batch_comparison']=completion.pending()
         state['history']=(history+[{'role':'user','content':message},
                                   {'role':'assistant','content':dumps({'tool_results':results,'error':error})}])[-20:]
         self.workflow.save(state)
         data=self._display(results,limit)
+        if completion:
+            data['completion_status']=completion.status
+            if completion.status=='answered':
+                data['message']=''
+                data['batch_target_answer']=completion.answer
+                data['tool_results']=[r for r in results if r['name']=='finish_answer' and r['result']['ok']]
+            elif completion.status=='awaiting_user':
+                data['message']='Clarification needed: '+state['waiting_question']
+            else:
+                data['message']='The batch-target comparison could not be completed. Review the available results before retrying.'
         data.update(run_id=run,counts=counts)
         # Unchecked model prose is never used to assert targets, execution, or approval.
         return Result(not bool(error),data,error)

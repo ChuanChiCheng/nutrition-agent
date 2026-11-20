@@ -18,13 +18,13 @@ def main():
         store = Store(os.environ.get('DATABASE_URL', ''), os.environ.get('DATABASE_SCHEMA', 'public'))
         if args.init_db:
             store.migrate()
-            print('資料庫初始化完成。')
+            print('Database initialized.')
             return 0
         store.check_schema()
         if args.seed:
             with open(args.seed) as f:
                 store.seed(json.load(f))
-            print('合成示範資料已載入。')
+            print('Synthetic demonstration data loaded.')
         if args.db_info:
             print(dumps(store.info()))
             return 0
@@ -37,9 +37,9 @@ def main():
     except Exception as exc:
         # Never print DSNs, credentials, request payloads, or upstream raw errors.
         if isinstance(exc, ValueError):
-            print('設定／資料錯誤：' + str(exc), file=sys.stderr)
+            print('Configuration/data error: ' + str(exc), file=sys.stderr)
         else:
-            print('操作失敗（' + type(exc).__name__ + '）；請檢查連線及設定，以相同 request_id 重試。', file=sys.stderr)
+            print('Operation failed (' + type(exc).__name__ + '); check connectivity and settings, then retry with the same request_id.', file=sys.stderr)
         return 1
 
 

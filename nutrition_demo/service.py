@@ -91,7 +91,7 @@ class NutritionService:
     def preview_profile(self,values):
         with self.store.transaction(lock=True) as c:
             values=self._validated_profile(c,values)
-            return self._preview(c,'profile',values,[{'profile':values}],'確認營養目標、時區與廚具設定後保存。')
+            return self._preview(c,'profile',values,[{'profile':values}],'Confirm nutrient targets, timezone, and equipment before saving.')
 
     @safe
     def list_inventory(self):
@@ -148,7 +148,7 @@ class NutritionService:
                 if row and (row['unit']!=i['unit'] or row['state']!=i['state']):raise ValueError('Inventory basis mismatch')
                 new=old+decimal(i['quantity']) if mode=='purchase' else decimal(i['quantity'])
                 changes.append({'ingredient_id':i['ingredient_id'],'before':old,'after':new,'unit':i['unit']})
-            return self._preview(c,'inventory',{'items':items,'mode':mode},changes,'確認食材購入／庫存校正後才更新。')
+            return self._preview(c,'inventory',{'items':items,'mode':mode},changes,'Confirm purchases or inventory reconciliation before updating.')
 
     @safe
     def preview_preparation(self,recipe_id,actual_usage,outputs,prepared_on,confirmed_dispositions=None):
@@ -187,7 +187,7 @@ class NutritionService:
             changes+=[{'disposition':d} for d in dispositions]
             changes+=[{'batch':b['name'],'boxes':b['boxes'],'allocations':b['allocations'],
                        **self._output_snapshot(c,recipe_id,actual,b)} for b in outputs]
-            return self._preview(c,'preparation',payload,changes,'一次扣除本次總用量；各批營養與成本只計獲分配食材。')
+            return self._preview(c,'preparation',payload,changes,'Consume total usage once; each batch receives nutrients and cost from its allocated ingredients only.')
 
     def _batch(self,c,batch_id):
         row=c.execute('SELECT * FROM batches WHERE id=%s',(batch_id,)).fetchone()
@@ -207,7 +207,7 @@ class NutritionService:
             version=self._addons(c,batch_id)['version']+1
             return self._preview(c,'addons',{'batch_id':batch_id,'items':items,'version':version},
                                  [{'batch_id':batch_id,'items':items,'version':version}],
-                                 '確認每餐預設加餐；食用時才扣庫存，現在不新增攝取。')
+                                 'Confirm default meal addons. Stock is consumed only when eaten; no intake is recorded now.')
 
     def _move(self,c,item,delta,kind,*,run=None,event=None):
         row=self._stock(c,item['ingredient_id'])
@@ -370,7 +370,7 @@ class NutritionService:
                 changes.append({'ingredient_id':i['ingredient_id'],'before':old,'after_inventory_adjustment':new,'unit':i['unit']})
             changes.append({'meal_to_record':payload})
             return self._preview(c,'reconciled_meal',{'inventory':{'items':items,'mode':mode},'meal':payload},changes,
-                                 '確認庫存差異與實際食用後，一次更新兩者。')
+                                 'Confirm stock differences and actual consumption before updating both atomically.')
 
     @safe
     def daily_summary(self,day):
@@ -452,7 +452,7 @@ class NutritionService:
             detail += [{'ingredient_id':d['item']['ingredient_id'],'inventory_delta':d['delta'],
                         'unit':d['item']['unit']} for d in deltas]
             return self._preview(c,'correction',{'event_id':event_id,'old':old,'new':new,'inventory_deltas':deltas},
-                                 detail,'核對日期、餐點、加餐、營養與庫存差額後，再確認更正。')
+                                 detail,'Review date, meal, addons, nutrients, and inventory differences before confirming correction.')
 
     def _apply_correction(self,c,payload):
         event=self._event(c,payload['event_id']);old=payload['old'];new=payload['new']
@@ -498,7 +498,7 @@ class NutritionService:
         with self.store.transaction(lock=True) as c:
             return self._preview(c,'product_label',{'ingredient_id':ingredient_id,'label':label},
                                  [{'ingredient_id':ingredient_id,'label':label}],
-                                 '確認實際商品標示與計價基準；只影響後續計算，歷史事件保留原快照。')
+                                 'Confirm the product label and pricing basis. Only future calculations change; historical snapshots are preserved.')
 
     def _apply_product_label(self,c,payload):
         ref=self.catalog.ingredient(payload['ingredient_id'])

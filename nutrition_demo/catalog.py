@@ -85,7 +85,7 @@ class Catalog:
                 ref=self.ingredient(item['ingredient_id']);price=ref.get('price')
                 costs.append(used_cost(price['usd'],item['quantity'],price['quantity']) if price else None)
             result.append({**recipe,'shopping':missing,'cost':aggregate_cost(costs),
-                           'capacity_note':'容量為參考；請核對現有鍋具與實際分裝。',
+                           'capacity_note':'Capacity is a reference; verify your equipment and actual portions.',
                            'known_equipment':profile.get('equipment',[])})
         return sorted(result,key=lambda r:len(r['shopping']))
 
@@ -110,36 +110,36 @@ class Catalog:
             i=by_id[id]
             return format(decimal(i['quantity'])/divisor,'f')+' '+i['unit']
         def names(ids):return '、'.join(self.ingredient(i)['name'] for i in ids if i in by_id)
-        result=['依本次確認配方備料；數量以確認清單為準，依鍋具容量調整分批。']
+        result=['Prepare the confirmed ingredient quantities; split cooking according to equipment capacity.']
         if recipe_id=='curry':
-            if 'rice' in by_id:result.append('先煮乾米 '+amount('rice')+'，液體依米種與鍋具確認。')
-            if 'broccoli' in by_id:result.append('另烤冷凍花椰菜 '+amount('broccoli')+'，依來源流程分開擺放。')
+            if 'rice' in by_id:result.append('First cook dry rice: '+amount('rice')+'; confirm liquid for the rice and equipment.')
+            if 'broccoli' in by_id:result.append('Roast frozen broccoli separately: '+amount('broccoli')+'; keep separate according to the source procedure.')
             aromatics=names(['onion','garlic'])
-            if aromatics:result.append('先炒 '+aromatics+'；蒜若有使用，最後短炒。')
-            result.append('把 '+names(['potato','carrot'])+' 分兩鍋；依確認水量微滾至近熟。')
-            if 'chicken' in by_id:result.append('每鍋後下雞胸 '+amount('chicken',2)+'，恢復微滾，以溫度計核對來源熟度。')
-            if 'curry_block' in by_id:result.append('關火後每鍋融化咖哩塊 '+amount('curry_block',2)+'，再小火攪拌增稠。')
+            if aromatics:result.append('First saute '+aromatics+'; briefly saute garlic last if used.')
+            result.append('Divide '+names(['potato','carrot'])+' between two pots; simmer with the confirmed water quantity until nearly cooked.')
+            if 'chicken' in by_id:result.append('Add chicken breast later to each pot: '+amount('chicken',2)+'; return to a simmer and verify source doneness with a thermometer.')
+            if 'curry_block' in by_id:result.append('Turn off heat and dissolve curry roux in each pot: '+amount('curry_block',2)+'; stir over low heat to thicken.')
         elif recipe_id=='nikujaga':
-            result+=['依來源冷藏乾醃與切菜；先煮乾米 '+amount('rice')+'。' if 'rice' in by_id else '依來源冷藏乾醃與切菜。',
-                     '兩鍋炒香配方中的蔬菜，加入已確認高湯與調味，蔬菜先燉至近熟。']
-            if 'pork_loin' in by_id:result.append('每鍋分批後下豬里肌 '+amount('pork_loin',2)+'，依來源測中心熟度並靜置。')
-            result.append('必要時另濃縮部分醬汁裹肉，避免為入味而久燉。')
-            if 'broccoli' in by_id:result.append('花椰菜 '+amount('broccoli')+' 另外加熱。')
+            result+=['Dry-brine under refrigeration and cut vegetables according to the source; first cook dry rice: '+amount('rice')+'。' if 'rice' in by_id else 'Dry-brine under refrigeration and cut vegetables according to the source.',
+                     'Saute the recipe vegetables in two pots, add confirmed stock and seasonings, and simmer vegetables until nearly cooked.']
+            if 'pork_loin' in by_id:result.append('Add pork loin later in batches to each pot: '+amount('pork_loin',2)+'; check center doneness and rest according to the source.')
+            result.append('If needed, reduce some sauce separately to coat the meat; avoid prolonged simmering.')
+            if 'broccoli' in by_id:result.append('Broccoli: '+amount('broccoli')+'; heat separately.')
         elif recipe_id=='bbq':
-            if 'pork_shoulder' in by_id:result.append('豬肩肉 '+amount('pork_shoulder')+' 依鍋具與來源壓力烹調，洩壓後手撕。')
-            if 'bbq_sauce' in by_id:result.append('拌入 BBQ 醬 '+amount('bbq_sauce')+'。')
-            result.append('依包裝煮通心粉，瀝乾後拌入已確認配方的奶油、奶類與起司。')
-            if 'broccoli' in by_id:result.append('花椰菜 '+amount('broccoli')+' 另烤；含菜與無菜成品分不同批次。')
+            if 'pork_shoulder' in by_id:result.append('Pork shoulder: '+amount('pork_shoulder')+'; pressure-cook according to the equipment and source, then shred after releasing pressure.')
+            if 'bbq_sauce' in by_id:result.append('Mix in BBQ sauce: '+amount('bbq_sauce')+'。')
+            result.append('Cook macaroni according to the package, drain, and mix in the confirmed butter, dairy, and cheese.')
+            if 'broccoli' in by_id:result.append('Broccoli: '+amount('broccoli')+'; roast separately and keep outputs with and without vegetables in separate batches.')
         elif recipe_id=='rice_pot':
-            result.append('分兩鍋依序操作，每鍋使用確認總量的一半。')
-            if 'beef' in by_id:result.append('每鍋炒牛肉 '+amount('beef',2)+'，再炒配方中的蔬菜。')
-            if 'broth' in by_id:result.append('Cancel，以每鍋高湯 '+amount('broth',2)+' 刮淨鍋底；這是每鍋全部高湯量。')
-            if 'rice' in by_id:result.append('鋪上每鍋乾米 '+amount('rice',2)+'，不往下攪拌，確認低於內鍋半滿線。')
-            result.append('依來源 High 4 分鐘、自然釋壓 10 分鐘；需核對實際米種、液體與鍋具。')
-            if 'canned_chicken' in by_id:result.append('最後拌入瀝乾雞胸，每鍋 '+amount('canned_chicken',2)+'，再依來源加熱測溫。')
-            if 'broccoli' in by_id:result.append('另加熱花椰菜 '+amount('broccoli')+'。')
+            result.append('Work sequentially in two pots, using half the confirmed total in each.')
+            if 'beef' in by_id:result.append('Saute beef in each pot: '+amount('beef',2)+'; then saute the recipe vegetables.')
+            if 'broth' in by_id:result.append('Cancel; use stock per pot: '+amount('broth',2)+' to deglaze; this is the entire stock quantity per pot.')
+            if 'rice' in by_id:result.append('Layer dry rice into each pot: '+amount('rice',2)+'; do not stir down and verify the contents are below the half-full line.')
+            result.append('Source timing: High for 4 minutes, natural release for 10 minutes; verify the actual rice, liquid, and equipment.')
+            if 'canned_chicken' in by_id:result.append('Finally mix drained chicken breast into each pot: '+amount('canned_chicken',2)+'; then heat and measure temperature according to the source.')
+            if 'broccoli' in by_id:result.append('Heat broccoli separately: '+amount('broccoli')+'。')
         else:result+=recipe['steps']
-        result.append('本次預計 '+str(boxes)+' 盒；做完後確認實際用量、盒數與各批組成。來源時間僅作參考，熟度依來源與實際測量。')
+        result.append('Planned output: '+str(boxes)+' boxes; confirm actual usage, output count, and batch composition after cooking. Source timings are references; verify doneness against sources and measurements.')
         return result
 
     def evidence(self,recipe_id,steps=None):
@@ -164,6 +164,6 @@ class Catalog:
             for i,chunk in enumerate(chunks):
                 result.append({'id':f'source:{page}:{i+1}','page':page,'text':chunk,'kind':'historical_source'})
             if recipe_id=='curry' and page==2:
-                summary=body.split('1 切好食材')[0].strip()
+                summary=body.split('1 Prepare the ingredients')[0].strip()
                 result.append({'id':'source:2:summary','page':2,'text':summary,'kind':'historical_source'})
         return result

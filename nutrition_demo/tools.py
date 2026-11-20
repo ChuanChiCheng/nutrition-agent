@@ -62,15 +62,4 @@ def tools():
              'parameters':deepcopy(schema),'strict':False} for name,schema in SCHEMAS.items()]
 
 
-QUESTIONS={
- 'profile':'請分別提供每餐與每日四項營養目標，以及時區、鍋具與餐盒容量。',
- 'inventory':'請核對目前食材與數量，並指出需要購入或校正的部分。',
- 'recipe':'請選擇這次想吃的料理。',
- 'batch':'請選擇批次',
- 'event':'請從候選清單選擇要更正的那一餐。',
- 'addons':'請說明該餐實際吃的加餐與數量，或明確表示沒有加餐。',
- 'quantity':'請提供這項食材實際數量、單位與生熟狀態。',
- 'date':'請提供實際食用日期。',
- 'product_label':'請提供實際商品營養標示、標示份量與單位；價格未知可保留未知。',
- 'details':'請補充這次操作缺少的實際資訊，再繼續處理。',
-}
+QUESTIONS={'profile': 'Provide separate meal and daily nutrient targets, timezone, equipment, and container capacity.', 'inventory': 'Confirm inventory quantities and identify purchases or corrections.', 'recipe': 'Which recipe would you like?', 'batch': 'Which batch did you eat?', 'event': 'Which meal record should be corrected?', 'addons': 'What addons and quantities did you actually eat, or were there none?', 'quantity': 'Provide the actual quantity, unit, and raw or cooked state.', 'date': 'What was the actual consumption date?', 'product_label': 'Provide the product nutrition label, reference quantity, and unit; unknown prices may remain unknown.', 'details': 'Provide the missing details before continuing.'}

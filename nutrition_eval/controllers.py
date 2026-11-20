@@ -56,10 +56,11 @@ def _client(config):
 
 def agent_factory(store, catalog, config, *, client=None) -> Controller:
     """Build a controller from safe runtime dependencies; no task or rubric enters."""
-    from .english import EnglishService as NutritionService, EnglishAgent, EnglishWorkflow as Workflow, AGENT_INSTRUCTIONS
+    from nutrition_demo.service import NutritionService
+    from nutrition_demo.workflow import Workflow
 
     service = NutritionService(store, catalog, clock=lambda: config.now)
     workflow = Workflow(service, session_id="evaluation")
     settings = _application_settings(config)
-    agent = EnglishAgent(service, workflow, client or _client(config), settings, instructions=AGENT_INSTRUCTIONS)
+    agent = DemoAgent(service, workflow, client or _client(config), settings)
     return AgentController(agent, workflow)

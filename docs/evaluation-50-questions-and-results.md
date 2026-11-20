@@ -77,3 +77,7 @@ The earlier review fixed unreachable preparation fixtures, required batch clarif
 - [Frozen configuration](../eval_config.json): clock, language revision, model settings, and hashes.
 - [Reporting implementation](../nutrition_eval/report.py): metric definitions.
 - Prior test and dry-run counts above come from this chat’s earlier execution records.
+
+## Shared implementation follow-up
+
+English is now the default in the shared agent implementation; evaluation language subclasses were removed. The updated full suite passed 165 tests, including help, explicit/implicit recovery, and errors. Source quotations and user data retain their original language. Formal model results remain pending.

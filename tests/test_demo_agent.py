@@ -112,9 +112,9 @@ def test_workflow_reopens_and_persists_clarification(stocked):
     from nutrition_demo.workflow import Workflow
     a=agent(stocked,[[('ask_user',{'topic':'batch'})],[]])
     assert a.handle('我吃了').ok
-    assert Workflow(stocked).load()['waiting_question']=='請選擇批次'
+    assert Workflow(stocked).load()['waiting_question']=='Which batch did you eat?'
     other=agent(stocked,[])
-    assert other.workflow.load()['waiting_question']=='請選擇批次'
+    assert other.workflow.load()['waiting_question']=='Which batch did you eat?'
 
 
 def test_limits_and_api_failure_do_not_write(stocked):
@@ -291,7 +291,7 @@ def test_question_tool_cannot_display_unverified_execution_claim(stocked):
     from nutrition_demo.display import render
     text=render(r)
     assert '已達標且我已自行核准' not in text
-    assert '請補充這次操作缺少的實際資訊' in text
+    assert 'Provide the missing details before continuing.' in text
 
 
 def test_grounded_question_specific_cooking_answer_uses_source_evidence(store,clock):
@@ -302,7 +302,7 @@ def test_grounded_question_specific_cooking_answer_uses_source_evidence(store,cl
     r=a.handle('為什麼雞胸要後下？請只根據咖哩來源說明')
     from nutrition_demo.display import render
     text=render(r)
-    assert '保留口感' in text and '來源' in text and '2' in text
+    assert '保留口感' in text and 'Source' in text and '2' in text
     assert s.store.info()['counts']['events']==0
 
 

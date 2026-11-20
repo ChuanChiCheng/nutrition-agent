@@ -89,7 +89,7 @@ docker compose --profile test run --rm --no-deps --entrypoint uv app run --locke
 
 ## Evaluation harness
 
-The entire evaluation path uses English: task requests, fixtures, scripted answers, rubrics, controller instructions, application responses, and reports. The English adapters use the shared business operations and preserve confirmation requirements.
+The entire evaluation path uses English: task requests, fixtures, scripted answers, rubrics, controller instructions, application responses, and reports. The shared agent implementation defaults to English; evaluation uses the same agent, workflow, service, and catalog classes without language overrides. Original source quotations and user-supplied data retain their original language.
 
 `development_tasks.jsonl` contains four development cases. `tasks.jsonl` contains exactly 50 formal cases: nutrition 10, preparation 8, addons 7, meal logging 8, corrections 10, queries 5, and unanswerable 2. Five cases carry an edge label. All fixtures are synthetic. `eval_config.json` freezes the application clock, model settings, versions, and dataset hash; `language_revision` identifies this English revision.
 

@@ -14,7 +14,8 @@ from nutrition_eval.__main__ import _load_config
 ROOT = Path(__file__).resolve().parents[1]
 
 def test_datasets_and_evaluation_prompts_are_english():
-    from nutrition_eval.english import AGENT_INSTRUCTIONS, QUESTIONS
+    from nutrition_demo.agent import INSTRUCTIONS as AGENT_INSTRUCTIONS
+    from nutrition_demo.tools import QUESTIONS
     from nutrition_eval.baseline import BASELINE_INSTRUCTIONS
     for filename in ('tasks.jsonl', 'development_tasks.jsonl'):
         assert not re.search(r'[\u3400-\u9fff]', (ROOT / filename).read_text())

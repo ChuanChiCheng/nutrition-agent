@@ -25,7 +25,7 @@ class Workflow:
         parts=message.split();cmd=parts[0] if parts else '';state=self.load()
         if cmd=='/inventory-ok':
             state.update(inventory_confirmed=True,stage='recipe_selection',waiting_question=None)
-            result=Result(True,{'inventory_confirmed':True,'message':'庫存已確認，請選擇料理。'})
+            result=Result(True,{'inventory_confirmed':True,'message':'Inventory confirmed. Select a recipe.'})
         elif cmd=='/select' and len(parts)==2:
             if not state['inventory_confirmed']:return Result(False,{},'Confirm current inventory before selecting recipe')
             try:self.service.catalog.recipe(parts[1])
@@ -38,7 +38,7 @@ class Workflow:
             if not p['calculation']['targets']['passed'] and parts[2:]!=['outside']:
                 return Result(False,{},'Outside targets; explicitly accept with outside to retain unmet status')
             state.update(stage='cooking',accepted_recipe=p['id'])
-            result=Result(True,{'accepted_recipe':p,'message':'已確認配方；烹調完成後仍需確認實際用量與批次。'})
+            result=Result(True,{'accepted_recipe':p,'message':'Recipe accepted. Confirm actual usage and batches after cooking.'})
         elif cmd in ('/confirm','/reject') and len(parts)==2:
             if state.get('pending_preview')!=parts[1]:
                 with self.store.transaction() as c:
@@ -58,7 +58,7 @@ class Workflow:
             if state.get('pending_preview'):self.service.reject_preview(state['pending_preview'])
             state.update(pending_preview=None,preview_return_stage=None,pending_preview_kind=None,stage='inventory_confirmation',inventory_confirmed=False,selected_recipe=None,proposal=None,
                          accepted_recipe=None,attempts=0,clarifications=0,waiting_question=None)
-            result=Result(True,{'inventory':self.service.list_inventory().data,'message':'請核對庫存，再輸入 /inventory-ok。'})
+            result=Result(True,{'inventory':self.service.list_inventory().data,'message':'Review inventory, then enter /inventory-ok.'})
         elif cmd=='/preview' and len(parts)==1:
             pending=state.get('pending_preview')
             with self.store.transaction() as c:

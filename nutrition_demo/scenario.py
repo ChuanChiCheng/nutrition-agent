@@ -42,7 +42,7 @@ def run_scripted(store):
         return result.data
     def call(name,args):
         responses.next_call=(name,args)
-        message='我已吃了批次 '+args['batch_id']+' 一盒' if name=='log_meal' else '合成情境：'+name
+        message='I ate one box from '+args['batch_id'] if name=='log_meal' else 'Synthetic scenario: '+name
         r=checked(agent.handle(message))
         if not r['tool_results'] or not r['tool_results'][0]['result']['ok']:
             raise ValueError('Scripted tool step failed')
@@ -53,7 +53,7 @@ def run_scripted(store):
     r=call('propose_recipe',{'items':[item(600)],'boxes':6});steps.append('proposal_calculated')
     checked(agent.handle('/accept-recipe '+r['proposal']['id']));steps.append('recipe_accepted')
     r=call('preview_preparation',{'recipe_id':'curry','actual_usage':[item(800)],'outputs':[
-        {'name':'合成備餐八盒','boxes':8,'allocations':[{'cooking_ingredient_id':'fixture_mix','quantity':'800','unit':'g'}]}],
+        {'name':'Synthetic eight-box batch','boxes':8,'allocations':[{'cooking_ingredient_id':'fixture_mix','quantity':'800','unit':'g'}]}],
         'prepared_on':'2026-11-17','confirmed_dispositions':[]})
     prepared=checked(agent.handle('/confirm '+r['pending_preview']));batch=prepared['batch_ids'][0];steps.append('preparation_confirmed')
     r=call('preview_batch_addons',{'batch_id':batch,'items':[{'ingredient_id':'fixture_yogurt','quantity':'1','unit':'serving','state':'synthetic'}]})

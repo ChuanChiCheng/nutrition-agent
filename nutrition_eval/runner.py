@@ -3,7 +3,7 @@ from dataclasses import replace
 import os
 import re
 
-from .english import EnglishCatalog as Catalog
+from nutrition_demo.catalog import Catalog
 
 from .contracts import SuiteResult
 from .episode import run_episode

@@ -42,8 +42,7 @@ class FixedWorkflowBaseline:
         self.client = client
         self.settings = settings
         # Reuse the application's validated fixed routing table without its model tool loop.
-        from .english import EnglishAgent
-        self._dispatcher = EnglishAgent(service, workflow, client, settings)
+        self._dispatcher = DemoAgent(service, workflow, client, settings)
 
     def _context(self):
         state = self.workflow.load()
@@ -175,7 +174,8 @@ class FixedWorkflowBaseline:
 
 def baseline_factory(store, catalog, config, *, client=None) -> Controller:
     """Construct the baseline from the same store, catalog, clock and limits as Agent."""
-    from .english import EnglishService as NutritionService, EnglishWorkflow as Workflow
+    from nutrition_demo.service import NutritionService
+    from nutrition_demo.workflow import Workflow
 
     service = NutritionService(store, catalog, clock=lambda: config.now)
     workflow = Workflow(service, session_id="evaluation")

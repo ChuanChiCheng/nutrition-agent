@@ -89,6 +89,7 @@ Agent **pass@3 is 48%** (at least one successful attempt) and **pass^3 is 28%** 
 
 These results describe this synthetic dataset. Repeated task variants, finite scripted clarifications, model-judge variability, and incomplete user-facing answers limit generalization. The [original v1 report](results/formal-50-english-2026-11-20-v1/report.md) is preserved with its response-capture limitations; its scores are not directly comparable to v2 because code, grading, and fixture states changed.
 
+- [Every task question and full passing standard](docs/evaluation-task-standards.md)
 - [All questions and result history](docs/evaluation-50-questions-and-results.md)
 - [Latest raw episodes and traces](results/formal-50-english-2026-11-20-v2/episodes.jsonl)
 - [Latest frozen run metadata](results/formal-50-english-2026-11-20-v2/status.json)

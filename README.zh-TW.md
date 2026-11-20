@@ -89,6 +89,7 @@ Agent **pass@3 為 48%**（至少一次成功），**pass^3 為 28%**（三次�
 
 結果僅描述這批合成題目。重複題型、有限的預寫澄清答案、模型 judge 的變異與回覆資訊不完整，都限制結果的推廣性。[原始 v1 報告](results/formal-50-english-2026-11-20-v1/report.md) 保留回覆擷取問題；由於程式、評分與 fixture 起始狀態已改變，不能直接將 v1 與 v2 分數當作同條件比較。
 
+- [每題問題與完整通過標準](docs/evaluation-task-standards.md)
 - [全部題目與結果歷史](docs/evaluation-50-questions-and-results.md)
 - [最新原始嘗試與操作軌跡](results/formal-50-english-2026-11-20-v2/episodes.jsonl)
 - [最新凍結執行資訊](results/formal-50-english-2026-11-20-v2/status.json)

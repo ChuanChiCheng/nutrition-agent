@@ -130,7 +130,7 @@ def test_controller_factory_receives_catalog_but_no_task_or_rubric():
 def test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response():
     from nutrition_demo.agent import Settings
     from nutrition_demo.tools import SCHEMAS
-    from nutrition_eval.baseline import ACTION_SCHEMA, FixedWorkflowBaseline
+    from nutrition_eval.baseline import ACTION_SCHEMA, ACTION_SCHEMAS, FixedWorkflowBaseline
 
     service = SpyService()
     workflow = FakeWorkflow()
@@ -145,7 +145,7 @@ def test_fixed_baseline_uses_closed_action_schema_and_one_route_per_response():
     assert result.data["action"] == "list_inventory"
     schema = client.responses.calls[0]["text"]["format"]["schema"]
     assert schema == ACTION_SCHEMA
-    assert schema["properties"]["action"]["enum"] == sorted(SCHEMAS)
+    assert schema["properties"]["action"]["enum"] == sorted(ACTION_SCHEMAS)
     assert schema["additionalProperties"] is False
     assert "expected_changes" not in json.dumps(client.responses.calls[0]["input"])
     assert all(branch["additionalProperties"] is False for branch in schema["properties"]["arguments"]["anyOf"])
@@ -230,3 +230,146 @@ def test_baseline_approval_uses_only_the_current_preview_id():
     assert approved.ok
     assert workflow.commands == ["/confirm preview-current"]
     assert not mismatch.ok
+
+
+def test_baseline_preserves_consumption_context_across_batch_clarification():
+    from nutrition_demo.agent import Settings
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    service.batch_summary=lambda: Result(True,{'batches':[
+        {'id':'batch-1','name':'Lunch batch','remaining_boxes':2},
+        {'id':'batch-2','name':'Dinner batch','remaining_boxes':2}]})
+    client=FakeClient(
+        {'action':'ask_user','arguments':{'topic':'batch'},'reply':'Which batch?'},
+        {'action':'log_meal','arguments':{'batch_id':'batch-1','eaten_on':'today','meal':'dinner','addon_override':None},'reply':'Recorded.'})
+    baseline=FixedWorkflowBaseline(service,FakeWorkflow(),client,Settings())
+    assert baseline.handle('I ate one box for dinner today.').ok
+    assert baseline.handle('Lunch batch.').ok
+    assert any(name=='log_meal' for name,args in service.calls)
+    assert baseline.workflow.load().get('pending_consumption') is None
+
+
+def test_baseline_correction_search_continues_to_preview_without_second_model_call():
+    from nutrition_demo.agent import Settings
+    from nutrition_demo.display import render
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    service.find_events=lambda query: Result(True,{'candidates':[{'id':'event-1'}],'needs_clarification':False})
+    client=FakeClient({'action':'correct_meal','arguments':{
+        'query':{'date':'2026-11-17','meal':'lunch'},'changes':{'date':'2026-11-18','meal':'breakfast'}},'reply':'Review correction.'})
+    baseline=FixedWorkflowBaseline(service,FakeWorkflow(),client,Settings())
+    result=baseline.handle('Move the November 17 lunch to November 18 breakfast.')
+    assert result.ok
+    assert len(client.responses.calls)==1
+    assert ('preview_correction',{'event_id':'event-1','changes':{'date':'2026-11-18','meal':'breakfast'}}) in service.calls
+    assert [t['name'] for t in result.data['trace'] if t['type']=='action']==['find_events','preview_correction']
+    assert result.data['counts']['tool_calls']==2
+    assert 'preview-1' in render(result)
+
+
+def test_baseline_ambiguous_correction_asks_before_preview():
+    from nutrition_demo.agent import Settings
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    service.find_events=lambda query: Result(True,{'candidates':[{'id':'event-1'},{'id':'event-2'}],'needs_clarification':True})
+    client=FakeClient({'action':'correct_meal','arguments':{'query':{'date':'2026-11-17'},'changes':{'meal':'breakfast'}},'reply':'Choose a record.'})
+    baseline=FixedWorkflowBaseline(service,FakeWorkflow(),client,Settings())
+    result=baseline.handle('Correct yesterday to breakfast.')
+    assert result.ok
+    assert result.data['action']=='ask_user'
+    from nutrition_eval.episode import _explicit_ask_user
+    assert _explicit_ask_user(result)['arguments']=={'topic':'event'}
+    assert baseline.workflow.load()['baseline_pending_correction']['changes']=={'meal':'breakfast'}
+    assert not any(name=='preview_correction' for name,args in service.calls)
+
+
+def test_baseline_preview_renders_service_changes_not_only_id():
+    from nutrition_demo.agent import Settings
+    from nutrition_demo.display import render
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    service.preview_inventory_change=lambda **kwargs: Result(True,{'id':'preview-stock','kind':'inventory',
+        'summary':'Confirm inventory change.','changes':[{'ingredient_id':'rice','before':'5','after':'10','unit':'g'}]})
+    client=FakeClient({'action':'preview_inventory_change','arguments':{'items':[],'mode':'reconcile'},'reply':'Review.'})
+    result=FixedWorkflowBaseline(service,FakeWorkflow(),client,Settings()).handle('Correct rice stock to 10 g.')
+    text=render(result)
+    assert 'rice' in text and '5' in text and '10' in text and 'Confirm inventory change.' in text
+
+
+def test_baseline_replays_m08_and_all_corrections_against_real_database():
+    import os
+    import re
+    from pathlib import Path
+    from nutrition_eval.fixtures import episode_store, seed_fixture
+    from nutrition_eval.runner import _catalog_from_fixture
+    from nutrition_eval.baseline import baseline_factory
+    from nutrition_eval.__main__ import _load_config
+    from nutrition_eval.tasks import load_tasks
+    from nutrition_eval.episode import run_episode
+    from nutrition_eval.grading import grade_state, grade_order
+
+    root=Path(__file__).resolve().parents[1]
+    _,config=_load_config(root/'eval_config.json')
+    cases=[t for t in load_tasks(root/'tasks.jsonl') if t.id=='M08' or t.category=='corrections']
+    assert len(cases)==11
+    for task in cases:
+        if task.id=='M08':
+            actions=[{'action':'ask_user','arguments':{'topic':'batch'},'reply':'Which batch?'},
+                {'action':'log_meal','arguments':{'batch_id':'batch-1','eaten_on':'2026-11-18','meal':'dinner','addon_override':None},'reply':'Recorded.'}]
+        else:
+            date=re.search(r'2026-\d\d-\d\d',task.request).group()
+            meal=next(m for m in ['breakfast','dinner','snack'] if m in task.request)
+            actions=[{'action':'correct_meal','arguments':{'query':{'date':'2026-11-17','meal':'lunch'},'changes':{'date':date,'meal':meal}},'reply':'Review the correction.'}]
+        client=FakeClient(*actions)
+        with episode_store(os.environ['TEST_DATABASE_URL'],'eval_baseline_fix') as store:
+            seed_fixture(store,task.fixture)
+            controller=baseline_factory(store,_catalog_from_fixture(task.fixture),config,client=client)
+            result=run_episode(task,controller,store,repeat=1,now=config.now,limits={
+                'max_model_calls':12,'max_tool_calls':24,'max_clarifications':3,'timeout_seconds':45})
+            assert result.status=='complete',(task.id,result.error)
+            assert grade_state(task,result.final_state).passed,(task.id,grade_state(task,result.final_state).reasons)
+            assert grade_order(task,result).passed,(task.id,grade_order(task,result).reasons)
+            assert result.reply and result.turns==2
+            assert len(client.responses.calls)==len(actions)
+            if task.category=='corrections':
+                assert result.tool_calls==2
+                initial=next(x['reply'] for x in result.interactions if x['kind']=='reply')
+                assert 'Original record' in initial and 'Corrected' in initial
+
+
+def test_baseline_correction_handles_no_match_and_pending_selection():
+    from nutrition_demo.agent import Settings
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    responses=iter([
+        Result(True,{'candidates':[{'id':'event-1'},{'id':'event-2'}]}),
+        Result(True,{'candidates':[{'id':'event-2'}]}),
+        Result(True,{'candidates':[]}),
+    ])
+    service.find_events=lambda query: next(responses)
+    client=FakeClient(
+        {'action':'correct_meal','arguments':{'query':{},'changes':{'meal':'breakfast'}},'reply':'Review.'},
+        {'action':'correct_meal','arguments':{'query':{'event_id':'event-2'},'changes':{}},'reply':'Review.'},
+        {'action':'correct_meal','arguments':{'query':{},'changes':{'meal':'dinner'}},'reply':'Review.'})
+    baseline=FixedWorkflowBaseline(service,FakeWorkflow(),client,Settings())
+    assert baseline.handle('Correct a meal.').data['action']=='ask_user'
+    assert baseline.handle('event-2').ok
+    assert ('preview_correction',{'event_id':'event-2','changes':{'meal':'breakfast'}}) in service.calls
+    assert 'baseline_pending_correction' not in baseline.workflow.load()
+    before=sum(n=='preview_correction' for n,args in service.calls)
+    empty=baseline.handle('Correct a nonexistent meal.')
+    assert 'No matching meal record' in empty.data['message']
+    assert sum(n=='preview_correction' for n,args in service.calls)==before
+
+
+def test_baseline_correction_respects_tool_budget_and_does_not_autoconfirm():
+    from nutrition_demo.agent import Settings
+    from nutrition_eval.baseline import FixedWorkflowBaseline
+    service=SpyService()
+    service.find_events=lambda query: Result(True,{'candidates':[{'id':'event-1'}]})
+    client=FakeClient({'action':'correct_meal','arguments':{'query':{},'changes':{'meal':'breakfast'}},'reply':'Review.'})
+    workflow=FakeWorkflow()
+    result=FixedWorkflowBaseline(service,workflow,client,Settings(max_tool_calls=1)).handle('Correct the meal.')
+    assert not result.ok and result.data['counts']['tool_calls']==1
+    assert not any(n=='preview_correction' for n,args in service.calls)
+    assert workflow.commands==[]

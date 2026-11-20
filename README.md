@@ -114,7 +114,7 @@ Preflight verifies the task hash, program revision, migration manifest, and `db_
 
 Artifacts include `episodes.jsonl`, `status.json`, and, for complete runs, `summary.md`, `failure_trace.md`, and `failure_analysis.md`. Metadata preserves the source/config hashes, frozen settings, migration checksums, judge prompt/schema, and resource limits. The report compares accuracy, turns, model calls, mean and nearest-rank p95 latency, tokens, pass@3, pass^3, and flipped task IDs.
 
-The later 200+ task benchmark and independent safety suite are separate datasets. The formal live comparison remains pending.
+The later 200+ task benchmark and independent safety suite are separate datasets. The first formal run is preserved under `results/formal-50-english-2026-11-20-v1`; its report documents response-capture limitations. The next run uses dataset `nutrition-eval-50-v2` and baseline `fixed-workflow-v2`, with explicit confirmed-inventory fixtures and Python-controlled correction continuation. No replacement paid run has been started.
 
 ## 重開、備份與還原
 

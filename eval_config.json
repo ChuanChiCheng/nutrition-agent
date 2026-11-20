@@ -16,9 +16,9 @@
   },
   "judge_store": false,
   "judge_version": "nutrition-reply-judge-v2",
-  "dataset_version": "nutrition-eval-50-v1",
-  "formal_taskset_sha256": "f23c1eb794c59b5019585de7df29f652c94ae6d50089af20470fd15dcedf7a9f",
-  "task_version": "nutrition-eval-50-v1",
+  "dataset_version": "nutrition-eval-50-v2",
+  "formal_taskset_sha256": "18150dbd01141402c6532e503214c50a927e771548530e886951018bbc79f772",
+  "task_version": "nutrition-eval-50-v2",
   "fixture_version": "synthetic-catalog-v1",
   "tool_version": "v1.0",
   "openai_sdk_version": "2.54.0",
@@ -34,5 +34,7 @@
   "judge_schema_sha256": "05f933dac3429a791546405a8c0fa049ac1b7debec833e6e4a93a088013199c5",
   "evaluation_language": "en",
   "language_revision": "english-v1",
-  "response_capture_version": "terminal-render-v1"
+  "response_capture_version": "terminal-render-v1",
+  "fixture_state_version": "inventory-confirmed-v2",
+  "baseline_version": "fixed-workflow-v2"
 }

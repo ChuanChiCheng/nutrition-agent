@@ -169,6 +169,19 @@ class DemoAgent:
         if limit:message+=' The call limit was reached. Review completed operations before continuing.'
         return {**state,'message':message,'tool_results':results,'limit_reached':limit}
 
+    def _prepare_user_message(self, message):
+        """Shared application bookkeeping before interpreting a user message."""
+        state = self.workflow.load()
+        state['waiting_question'] = None
+        if declares_consumption(message):
+            candidates = self.service.batch_summary().data.get('batches', [])
+            state['pending_consumption'] = {
+                'source_message': message,
+                'candidate_ids': [b['id'] for b in candidates if b['remaining_boxes'] > 0],
+            }
+        self.workflow.save(state)
+        return state
+
     def handle(self,message):
         if message.strip()=='/retry':
             return self._recover_meal(message,force=True) or Result(False,{},'No completed meal operation to recover')
@@ -182,12 +195,7 @@ class DemoAgent:
         settings={**asdict(self.settings),'sdk':openai.__version__,'tools':TOOL_VERSION,'parameters':self.settings.parameters()}
         with self.service.store.transaction() as c:
             c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
-        state=self.workflow.load()
-        state['waiting_question']=None
-        if declares_consumption(message):
-            candidates=self.service.batch_summary().data.get('batches',[])
-            state['pending_consumption']={'source_message':message,'candidate_ids':[b['id'] for b in candidates if b['remaining_boxes']>0]}
-        self.workflow.save(state)
+        state=self._prepare_user_message(message)
         # The app sends the history and state as data, never as instructions.
         history=state.get('history',[])[-20:]
         context={'workflow':{k:v for k,v in state.items() if k!='history'},'profile':self.service.get_profile().data,

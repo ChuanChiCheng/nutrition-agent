@@ -36,7 +36,7 @@ def test_formal_taskset_matches_approved_category_counts_and_provenance():
     assert sum("edge" in task.labels for task in tasks) >= 5
     assert sum("unanswerable" in task.labels for task in tasks) == 2
     assert all(task.fixture.get("synthetic") is True for task in tasks)
-    assert all(task.fixture.get("provenance", {}).get("dataset_version") == "nutrition-eval-50-v1" for task in tasks)
+    assert all(task.fixture.get("provenance", {}).get("dataset_version") == "nutrition-eval-50-v2" for task in tasks)
     assert all(task.fixture.get("catalog", {}).get("version") == "synthetic-catalog-v1" for task in tasks)
     assert all(
         ingredient.get("source", {}).get("status") == "synthetic"
@@ -179,7 +179,7 @@ def test_eval_config_freezes_clock_models_versions_and_excludes_credentials():
     assert config["judge_version"] == JUDGE_VERSION
     assert config["tool_version"] == TOOL_VERSION
     assert config["openai_sdk_version"] == openai_version
-    assert config["dataset_version"] == config["task_version"] == "nutrition-eval-50-v1"
+    assert config["dataset_version"] == config["task_version"] == "nutrition-eval-50-v2"
     assert config["formal_taskset_sha256"] == sha256((ROOT / "tasks.jsonl").read_bytes()).hexdigest()
     from nutrition_eval.judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA
 
@@ -408,3 +408,13 @@ def test_development_cases_grade_correct_and_intentionally_incorrect_samples(mon
     )
     assert not failed_reply.passed
     assert failed_reply.reasons
+
+
+def test_evaluation_fixtures_start_with_confirmed_inventory_and_correct_stage():
+    from nutrition_eval.tasks import load_tasks
+    for filename in ('tasks.jsonl','development_tasks.jsonl'):
+        for task in load_tasks(ROOT / filename):
+            session=next((s for s in task.fixture['workflow_sessions'] if s['id']=='evaluation'),None)
+            assert session is not None, task.id
+            assert session['data']['inventory_confirmed'] is True, task.id
+            assert session['data']['stage']==('cooking' if task.category=='preparation' else 'ready'),task.id

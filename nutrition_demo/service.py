@@ -302,6 +302,23 @@ class NutritionService:
             return {'candidates':rows,'needs_clarification':len(rows)!=1}
 
     @safe
+    def assess_batch_targets(self,batch_id):
+        # The shared state lock makes the batch/profile/version snapshot coherent
+        # with concurrent writes, without changing any business data.
+        with self.store.transaction(lock=True) as c:
+            batch=self._batch(c,batch_id)
+            profile=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+            if not profile or not profile['data'].get('meal_targets'):
+                raise ValueError('Configured meal targets are required')
+            actual=n(batch['data']['box_nutrients'])
+            targets=n(profile['data']['meal_targets'])
+            return {'state_version':self._version(c),'comparison':{
+                'batch_id':batch['id'],'batch_name':batch['name'],
+                'basis':'per_box','target_scope':'meal',
+                'sources':batch['data'].get('sources',[]),
+                **validate_targets(actual,targets)}}
+
+    @safe
     def batch_summary(self):
         with self.store.transaction() as c:
             batches=[]

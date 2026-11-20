@@ -14,6 +14,24 @@ def nutrients(n):
     return f"{number(n['kcal'])} kcal | Protein {number(n['protein_g'])} g | Carbohydrates {number(n['carbs_g'])} g | Fat {number(n['fat_g'])} g"
 
 
+def exact_number(value):
+    text=format(Decimal(str(value)),'f')
+    return text.rstrip('0').rstrip('.') if '.' in text else text
+
+
+def batch_target_answer(answer):
+    lines=[answer['batch_name']+' | Per-box comparison against configured meal targets.']
+    for key,label,unit in (('kcal','Calories','kcal'),('protein_g','Protein','g'),
+                           ('carbs_g','Carbohydrates','g'),('fat_g','Fat','g')):
+        metric=answer['metrics'][key]
+        value=lambda field:exact_number(metric[field])
+        lines.append(f"{label}: Actual {value('actual')} {unit} | Target {value('target')} {unit} | Allowed {value('lower')}–{value('upper')} {unit} | Difference {value('difference')} {unit} | "+('Pass' if metric['passed'] else 'Fail'))
+    lines.append('Overall meal-target status: '+('Pass; all four nutrients are within their allowed ranges.' if answer['passed'] else 'Fail; one or more nutrients are outside their allowed ranges.'))
+    statuses=sorted({source.get('status','unknown') for source in answer['sources']})
+    lines.append('Source status: '+(', '.join(statuses) or 'unknown'))
+    return lines
+
+
 def items(values):
     return '\n'.join(f"  • {i.get('name',i.get('ingredient_id',''))}: {number(i['quantity'])} {i['unit']}({i.get('state','')})" for i in values) or '  None'
 
@@ -79,6 +97,7 @@ def recipe(r):
 
 
 def data_lines(data):
+    if 'batch_target_answer' in data:return batch_target_answer(data['batch_target_answer'])
     if 'explanation' in data:
         answer=data['explanation'];lines=[answer['recipe_name']+' | Explanation with source evidence']
         for evidence in answer['evidence']:

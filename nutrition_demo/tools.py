@@ -56,10 +56,12 @@ DESCRIPTIONS={
 }
 
 
-def tools():
+def tools(schemas=None,descriptions=None):
     # Non-strict schemas allow optional correction fields. Local validation remains mandatory.
-    return [{'type':'function','name':name,'description':DESCRIPTIONS.get(name,name.replace('_',' ')),
-             'parameters':deepcopy(schema),'strict':False} for name,schema in SCHEMAS.items()]
+    registry=SCHEMAS if schemas is None else schemas
+    labels=DESCRIPTIONS if descriptions is None else descriptions
+    return [{'type':'function','name':name,'description':labels.get(name,name.replace('_',' ')),
+             'parameters':deepcopy(schema),'strict':False} for name,schema in registry.items()]
 
 
 QUESTIONS={'profile': 'Provide separate meal and daily nutrient targets, timezone, equipment, and container capacity.', 'inventory': 'Confirm inventory quantities and identify purchases or corrections.', 'recipe': 'Which recipe would you like?', 'batch': 'Which batch did you eat?', 'event': 'Which meal record should be corrected?', 'addons': 'What addons and quantities did you actually eat, or were there none?', 'quantity': 'Provide the actual quantity, unit, and raw or cooked state.', 'date': 'What was the actual consumption date?', 'product_label': 'Provide the product nutrition label, reference quantity, and unit; unknown prices may remain unknown.', 'details': 'Provide the missing details before continuing.'}

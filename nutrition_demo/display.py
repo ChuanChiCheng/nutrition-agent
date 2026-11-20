@@ -122,7 +122,12 @@ def data_lines(data):
         return lines
     if 'candidates' in data:
         return ['Candidates: ']+[f"  {x['id']} | {x.get('name',x.get('data',{}).get('batch_name',''))} | {x.get('eaten_on',x.get('remaining_boxes',''))}" for x in data['candidates']]+(['Select one candidate first.'] if data.get('needs_clarification') else [])
-    if 'event_id' in data:return ['Meal record updated: '+data['event_id']]+(['This meal: '+nutrients(data['total_nutrients'])] if 'total_nutrients' in data else [])
+    if 'event_id' in data:
+        lines=['Meal record updated: '+data['event_id']]
+        for key,label in (('batch_name','Batch'),('eaten_on','Date'),('meal','Meal')):
+            if data.get(key) is not None:lines.append(label+': '+data[key])
+        if 'total_nutrients' in data:lines.append('This meal: '+nutrients(data['total_nutrients']))
+        return lines
     if 'batch_ids' in data:return ['Preparation confirmed; ingredients were consumed once.','Batch: '+', '.join(data['batch_ids'])]
     if 'updated_inventory' in data:return ['Inventory updated.']
     if 'addon_version' in data:return ['Default addon plan saved; no intake recorded or stock consumed.']

@@ -1,5 +1,31 @@
+import pytest
+
 from nutrition_demo.models import Result,Nutrients
 from nutrition_demo.display import render,preview
+
+
+@pytest.mark.parametrize('successful', [True, False])
+def test_meal_tool_receipt_identifies_saved_batch_date_and_meal_only_on_success(successful):
+    data={
+        'event_id':'meal-event', 'batch_id':'batch-1',
+        'batch_name':'Synthetic curry lunch batch', 'eaten_on':'2026-11-18', 'meal':'dinner',
+        'total_nutrients':{'kcal':600,'protein_g':40,'carbs_g':65,'fat_g':20},
+    }
+    text=render(Result(True,{'tool_results':[{
+        'name':'log_meal',
+        'result':{'ok':successful,'data':data,'error':None if successful else 'Write failed'},
+    }]}))
+
+    if successful:
+        assert 'Meal record updated: meal-event' in text
+        assert 'Batch: Synthetic curry lunch batch' in text
+        assert 'Date: 2026-11-18' in text
+        assert 'Meal: dinner' in text
+        assert 'This meal: 600 kcal | Protein 40 g | Carbohydrates 65 g | Fat 20 g' in text
+    else:
+        assert 'Write failed' in text
+        assert 'Meal record updated' not in text
+        assert 'Batch: Synthetic curry lunch batch' not in text
 
 
 def test_proposal_shows_nutrition_cost_steps_and_gap_before_confirmation():

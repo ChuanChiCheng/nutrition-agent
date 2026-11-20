@@ -1,3 +1,5 @@
+> Latest result: the corrected v2 paid run is complete: Agent **57/150 (38%)**, baseline **25/50 (50%)**, with no null final replies. See the [updated report](../results/formal-50-english-2026-11-20-v2/report.md). Earlier pending-state and v1 notes below are historical.
+
 > Update: the formal paid run has now completed. See the [formal report](../results/formal-50-english-2026-11-20-v1/report.md). Raw accuracy was Agent 0/150 and baseline 16/50; the report documents a response-capture limitation that prevents treating these as a clean end-user comparison. The pending-status text below describes the pre-run state.
 
 # Evaluation: 50 questions and result status

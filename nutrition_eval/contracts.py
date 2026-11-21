@@ -13,6 +13,8 @@ TaskCategory = Literal[
     "unanswerable",
 ]
 TaskLabel = Literal["edge", "unanswerable"]
+# Lecture-slide task types. "exact" is not used: every answer here is graded by rubric.
+TaskType = Literal["tool", "rubric", "unanswerable"]
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,7 @@ class EvalTask:
     expected_changes: list[ExpectedChange]
     required_order: list[dict]
     reply_rubric: list[str]
+    task_type: TaskType = "rubric"
 
 
 @dataclass(frozen=True)

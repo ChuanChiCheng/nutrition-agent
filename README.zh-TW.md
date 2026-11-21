@@ -73,31 +73,34 @@ docker compose run --rm app --model gpt-6-luna
 
 ## 最新評估結果
 
-修正後的[正式 v2 報告](results/formal-50-english-2026-11-20-v2/report.md) 包含 **50 題英文問題與 200 次已評分嘗試**：每題 Agent 三次、baseline 一次。每次從隔離測試 schema 中的全新合成資料開始，使用相同固定應用程式時鐘。
+[正式 v5 報告](results/formal-50-english-2026-11-20-v5/report.md) 採用講義題目格式，包含 **50 題英文問題與 200 次已評分嘗試**：每題 Agent 三次、baseline 一次。每次從隔離測試 schema 中的全新合成資料開始，使用相同固定應用程式時鐘。
 
 | 指標 | Agent | 固定流程 baseline |
 |---|---:|---:|
-| 成功次數 | 57 / 150 | 25 / 50 |
-| 準確率 | 38% | 50% |
-| 平均回覆輪數 | 1.37 | 1.34 |
-| 平均模型呼叫數 | 1.81 | 1.00 |
-| 平均延遲 | 3,606.7 ms | 3,061.3 ms |
-| p95 延遲（nearest rank） | 6,404 ms | 6,249 ms |
-| 平均輸入＋輸出 tokens | 6,739.0 | 3,889.6 |
+| 成功次數 | 145 / 150 | 43 / 50 |
+| 準確率 | 96.7% | 86% |
+| 平均回覆輪數 | 1.51 | 1.38 |
+| 平均模型呼叫數 | 2.04 | 1.02 |
+| 平均延遲 | 3,496.9 ms | 2,763.3 ms |
+| p95 延遲（nearest rank） | 5,876 ms | 5,332 ms |
+| 平均輸入＋輸出 tokens | 9,158.8 | 4,504.1 |
 
-Agent **pass@3 為 48%**（至少一次成功），**pass^3 為 28%**（三次全部成功）。兩個控制器的更正嘗試全部通過，最終回覆皆無 null。成功須同時符合商業終態、動作順序及所有文字 rubric 條件；judge 用量不納入控制器指標。
+Agent **pass@3 為 100%**（至少一次成功），**pass^3 為 94%**（三次全部成功）；A06、A07、P08 在三次之間結果翻轉。兩個控制器皆無失敗的執行，最終回覆皆無 null。成功須同時符合商業終態、動作順序及所有文字 rubric 條件；judge 用量不納入控制器指標。
 
-結果僅描述這批合成題目。重複題型、有限的預寫澄清答案、模型 judge 的變異與回覆資訊不完整，都限制結果的推廣性。[原始 v1 報告](results/formal-50-english-2026-11-20-v1/report.md) 保留回覆擷取問題；由於程式、評分與 fixture 起始狀態已改變，不能直接將 v1 與 v2 分數當作同條件比較。
+v5 之前，[v3 報告](results/formal-50-english-2026-11-20-v3/report.md) 在同一批題目上測得 Agent 38%、baseline 60%。v3 的 Agent 失敗全部出在回覆：固定模板漏掉使用者要求的資訊。Commit `0ad1e32` 與 `2f14d8a` 在不顯示未經檢查的模型文字的前提下，讓應用程式產生的回覆變完整；[v4 報告](results/formal-50-english-2026-11-20-v4/report.md) 記錄了一個不公平地拉低 baseline 的工具 schema 問題，已在 v5 修正。這些修正是根據同一批 50 題的 v3 失敗設計的，因此 v5 會高估推廣效果。
+
+結果僅描述這批合成題目。重複題型、有限的預寫澄清答案與模型 judge 的變異，都限制結果的推廣性。[v2 報告](results/formal-50-english-2026-11-20-v2/report.md) 在欄位改名前執行同一批題目（Agent 38%、baseline 50%），差異來自模型與 judge 的變異。[原始 v1 報告](results/formal-50-english-2026-11-20-v1/report.md) 保留回覆擷取問題；由於程式、評分與 fixture 起始狀態已改變，不能直接與之後的分數當作同條件比較。
 
 - [每題問題與完整通過標準](docs/evaluation-task-standards.md)
 - [全部題目與結果歷史](docs/evaluation-50-questions-and-results.md)
-- [最新原始嘗試與操作軌跡](results/formal-50-english-2026-11-20-v2/episodes.jsonl)
-- [最新凍結執行資訊](results/formal-50-english-2026-11-20-v2/status.json)
+- [Take-home 報告](Report.md)
+- [最新原始嘗試與操作軌跡](results/formal-50-english-2026-11-20-v5/episodes.jsonl)
+- [最新凍結執行資訊](results/formal-50-english-2026-11-20-v5/status.json)
 - [回覆擷取修正](docs/verification/evaluation-response-capture.md)與 [baseline／fixture 修正](docs/verification/evaluation-baseline-v2.md)
 
 ## 執行評估
 
-`tasks.jsonl` 包含營養 10 題、烹調 8 題、加餐 7 題、食用紀錄 8 題、更正 10 題、查詢 5 題與無法回答 2 題；其中五題帶有 edge 標籤。四題開發案例獨立保存。`eval_config.json` 凍結題庫 hash、模型、上限、時鐘、migrations 與評分版本。目前版本為 `nutrition-eval-50-v2`、`fixed-workflow-v2`、`terminal-render-v1`。
+`tasks.jsonl` 包含營養 10 題、烹調 8 題、加餐 7 題、食用紀錄 8 題、更正 10 題、查詢 5 題與無法回答 2 題；其中五題帶有 edge 標籤。每一列採用講義格式：`id`、`type`（`tool` 33 題、`rubric` 15 題、`unanswerable` 2 題）、`question` 與 `rubric`，另含狀態與順序評分所需的 fixture、預設回答、核准、預期變更與必要順序。`tool` 題除了回覆 rubric，也檢查最終狀態與動作順序。正式 v3–v5 使用此格式；v2 使用欄位改名前的同一批 50 題。四題開發案例獨立保存。`eval_config.json` 凍結題庫 hash、模型、上限、時鐘、migrations 與評分版本。目前版本為 `nutrition-eval-50-v2`、`fixed-workflow-v2`、`terminal-render-v1` 與工具版本 `v1.2`。
 
 不呼叫資料庫或模型，即可產生固定假資料報告：
 
@@ -118,7 +121,7 @@ docker compose --profile test run --build --rm --no-deps --volume "$PWD/results:
 
 ## 測試與離線示範
 
-最近一次在 `main` 的完整測試共有 **175 項通過**。資料庫測試使用真實 PostgreSQL 與獨立 schema，外部模型回覆採假資料。
+最近一次完整測試（branch `karry_test`）共有 **192 項通過**。資料庫測試使用真實 PostgreSQL 與獨立 schema，外部模型回覆採假資料。
 
 ```bash
 docker compose --profile test up -d --wait db_test

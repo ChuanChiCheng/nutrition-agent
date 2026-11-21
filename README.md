@@ -73,31 +73,34 @@ Models cannot approve previews. Writes are serialized and deduplicated; the same
 
 ## Latest evaluation results
 
-The corrected [formal v2 report](results/formal-50-english-2026-11-20-v2/report.md) contains **50 English questions and 200 scored attempts**: three Agent attempts and one baseline attempt per question. Each attempt starts with fresh synthetic data in an isolated test schema and the same fixed application clock.
+The [formal v5 report](results/formal-50-english-2026-11-20-v5/report.md) uses the lecture-slide task format and contains **50 English questions and 200 scored attempts**: three Agent attempts and one baseline attempt per question. Each attempt starts with fresh synthetic data in an isolated test schema and the same fixed application clock.
 
 | Metric | Agent | Fixed-workflow baseline |
 |---|---:|---:|
-| Successful attempts | 57 / 150 | 25 / 50 |
-| Accuracy | 38% | 50% |
-| Mean turns | 1.37 | 1.34 |
-| Mean model calls | 1.81 | 1.00 |
-| Mean latency | 3,606.7 ms | 3,061.3 ms |
-| p95 latency (nearest rank) | 6,404 ms | 6,249 ms |
-| Mean input + output tokens | 6,739.0 | 3,889.6 |
+| Successful attempts | 145 / 150 | 43 / 50 |
+| Accuracy | 96.7% | 86% |
+| Mean turns | 1.51 | 1.38 |
+| Mean model calls | 2.04 | 1.02 |
+| Mean latency | 3,496.9 ms | 2,763.3 ms |
+| p95 latency (nearest rank) | 5,876 ms | 5,332 ms |
+| Mean input + output tokens | 9,158.8 | 4,504.1 |
 
-Agent **pass@3 is 48%** (at least one successful attempt) and **pass^3 is 28%** (all three attempts succeed). Both controllers passed every correction attempt, and neither had a null final reply. Success requires correct final business state, action order, and every response rubric criterion. Judge usage is excluded from controller metrics.
+Agent **pass@3 is 100%** (at least one successful attempt) and **pass^3 is 94%** (all three attempts succeed); A06, A07, and P08 flip across runs. Neither controller had a failed episode or a null final reply. Success requires correct final business state, action order, and every response rubric criterion. Judge usage is excluded from controller metrics.
 
-These results describe this synthetic dataset. Repeated task variants, finite scripted clarifications, model-judge variability, and incomplete user-facing answers limit generalization. The [original v1 report](results/formal-50-english-2026-11-20-v1/report.md) is preserved with its response-capture limitations; its scores are not directly comparable to v2 because code, grading, and fixture states changed.
+Before v5, the [v3 report](results/formal-50-english-2026-11-20-v3/report.md) measured Agent 38% and baseline 60% on the same tasks. Every v3 Agent failure was in the reply, because fixed templates omitted requested facts. Commits `0ad1e32` and `2f14d8a` made the application-rendered replies complete without displaying unchecked model prose; the [v4 report](results/formal-50-english-2026-11-20-v4/report.md) records a tool-schema problem that unfairly lowered the baseline and was fixed in v5. The fixes were designed from v3 failures on these same 50 tasks, so v5 overstates generalization.
+
+These results describe this synthetic dataset. Repeated task variants, finite scripted clarifications, and model-judge variability limit generalization. The [v2 report](results/formal-50-english-2026-11-20-v2/report.md) ran the same tasks before the field rename (Agent 38%, baseline 50%); the differences reflect model and judge variation. The [original v1 report](results/formal-50-english-2026-11-20-v1/report.md) is preserved with its response-capture limitations; its scores are not directly comparable because code, grading, and fixture states changed.
 
 - [Every task question and full passing standard](docs/evaluation-task-standards.md)
 - [All questions and result history](docs/evaluation-50-questions-and-results.md)
-- [Latest raw episodes and traces](results/formal-50-english-2026-11-20-v2/episodes.jsonl)
-- [Latest frozen run metadata](results/formal-50-english-2026-11-20-v2/status.json)
+- [Take-home report](Report.md)
+- [Latest raw episodes and traces](results/formal-50-english-2026-11-20-v5/episodes.jsonl)
+- [Latest frozen run metadata](results/formal-50-english-2026-11-20-v5/status.json)
 - [Response-capture fix](docs/verification/evaluation-response-capture.md) and [baseline/fixture fixes](docs/verification/evaluation-baseline-v2.md)
 
 ## Running the evaluation
 
-`tasks.jsonl` contains nutrition 10, preparation 8, addons 7, meal logging 8, corrections 10, queries 5, and unanswerable 2; five cases carry an edge label. The four development cases are separate. `eval_config.json` freezes the dataset hash, models, limits, clock, migrations, and grading versions. Current revisions are `nutrition-eval-50-v2`, `fixed-workflow-v2`, and `terminal-render-v1`.
+`tasks.jsonl` contains nutrition 10, preparation 8, addons 7, meal logging 8, corrections 10, queries 5, and unanswerable 2; five cases carry an edge label. Each row uses the lecture-slide format: `id`, `type` (`tool` 33, `rubric` 15, `unanswerable` 2), `question`, and `rubric`, plus the fixture, scripted answers, approval, expected changes, and required order used for state and order grading. `tool` tasks are graded on final state and action order as well as the response rubric. The formal v3–v5 runs use this format; v2 used the same 50 tasks before the rename. The four development cases are separate. `eval_config.json` freezes the dataset hash, models, limits, clock, migrations, and grading versions. Current revisions are `nutrition-eval-50-v2`, `fixed-workflow-v2`, `terminal-render-v1`, and tool version `v1.2`.
 
 Generate a deterministic fake-client report without database or model calls:
 
@@ -118,7 +121,7 @@ Preflight verifies frozen settings and the dedicated `db_test/nutrition_test` ta
 
 ## Tests and offline demo
 
-The latest full test run on `main` passed **175 tests**. Database-backed tests use real PostgreSQL with separate schemas; external model responses are faked.
+The latest full test run (branch `karry_test`) passed **192 tests**. Database-backed tests use real PostgreSQL with separate schemas; external model responses are faked.
 
 ```bash
 docker compose --profile test up -d --wait db_test

@@ -277,7 +277,7 @@ class NutritionService:
                 elif kind=='preparation':result=self._apply_preparation(c,payload,request_id)
                 elif kind=='addons':
                     c.execute('INSERT INTO batch_addons VALUES(%s,%s,%s)',(payload['batch_id'],payload['version'],jsonb({'items':payload['items']})))
-                    result={'batch_id':payload['batch_id'],'addon_version':payload['version']}
+                    result={'batch_id':payload['batch_id'],'addon_version':payload['version'],'items':payload['items']}
                 elif kind=='correction':result=self._apply_correction(c,payload)
                 elif kind=='reconciled_meal':
                     self._apply_inventory(c,payload['inventory'])
@@ -302,10 +302,16 @@ class NutritionService:
             return {'candidates':rows,'needs_clarification':len(rows)!=1}
 
     @safe
-    def batch_summary(self):
+    def batch_summary(self,batch_id=None):
         with self.store.transaction() as c:
             batches=[]
-            for b in c.execute('SELECT * FROM batches ORDER BY cooking_run_id,name').fetchall():
+            profile=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+            meal_targets=profile['data'].get('meal_targets') if profile else None
+            rows=c.execute('SELECT * FROM batches ORDER BY cooking_run_id,name').fetchall()
+            if batch_id is not None:
+                rows=[b for b in rows if b['id']==batch_id]
+                if not rows:raise ValueError('Unknown batch')
+            for b in rows:
                 addons=self._addons(c,b['id']);box=n(b['data']['box_nutrients'])
                 addon_total=sum((n(i['nutrients']) for i in addons['data']['items']),ZERO)
                 cost=b['data']['box_cost']
@@ -315,7 +321,9 @@ class NutritionService:
                                 'addon_version':addons['version'],'meal_nutrients':asdict(box+addon_total),
                                 'box_cost':{**cost,'known_subtotal':decimal(cost['known_subtotal']),
                                             'total':decimal(cost['total']) if cost['total'] is not None else None},
-                                'sources':b['data']['sources'],'targets':b['data'].get('targets')})
+                                'sources':b['data']['sources'],'targets':b['data'].get('targets'),
+                                # Exact per-box check against the saved meal targets, computed by the application.
+                                'meal_target_check':validate_targets(box,n(meal_targets)) if meal_targets else None})
             return {'batches':batches}
 
     def _meal_payload(self,c,batch_id,eaten_on,meal=None,addon_override=None,*,check_stock=True):
@@ -339,7 +347,8 @@ class NutritionService:
                   (event,payload['batch_id'],payload['eaten_on'],payload['meal'],jsonb(payload)))
         c.execute('UPDATE batches SET remaining_boxes=remaining_boxes-1 WHERE id=%s',(payload['batch_id'],))
         for i in payload['addon_items']:self._move(c,i,-decimal(i['quantity']),'meal_addon',event=event)
-        return {'event_id':event,**payload}
+        remaining=c.execute('SELECT remaining_boxes FROM batches WHERE id=%s',(payload['batch_id'],)).fetchone()['remaining_boxes']
+        return {'event_id':event,**payload,'remaining_boxes':remaining}
 
     @safe
     def log_meal(self,batch_id,eaten_on,meal,request_id,addon_override=None):

@@ -2,11 +2,13 @@
 import json
 import jsonschema
 import time
+from decimal import Decimal, InvalidOperation
 
 from .contracts import GradePart
 
 
 JUDGE_VERSION = "nutrition-reply-judge-v2"
+REPLY_GRADER_VERSION = "nutrition-reply-grader-v1"
 JUDGE_INSTRUCTIONS = """You are an independent evaluator. Score only the listed response criteria using the provided fixture, conversation, controller reply, and actual final state.
 Do not invent facts. Do not use or infer hidden expected_changes or process order. For each numbered criterion return exactly one result with the same index, a boolean passed value, and a short reason. Return only the required JSON object."""
 JUDGE_SCHEMA = {
@@ -84,9 +86,120 @@ def _usage(response):
     }
 
 
+def uses_model_judge(task) -> bool:
+    """Return whether a task's reply rubric needs a model judge call."""
+    return task.category != "addons"
+
+
+def _exact_number(value):
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not number.is_finite():
+        return None
+    text = format(number, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _addon_preview(episode):
+    for row in reversed(episode.trace):
+        if not isinstance(row, dict) or row.get("name") != "preview_batch_addons":
+            continue
+        result = row.get("result")
+        arguments = row.get("arguments")
+        if not isinstance(result, dict) or result.get("ok") is not True:
+            continue
+        if not isinstance(arguments, dict):
+            continue
+        batch_id = arguments.get("batch_id")
+        items = arguments.get("items")
+        if isinstance(batch_id, str) and isinstance(items, list) and items:
+            return batch_id, items
+    return None
+
+
+def _addon_names(task, batch_id, items):
+    fixture = task.fixture if isinstance(task.fixture, dict) else {}
+    batches = fixture.get("batches", [])
+    batch_name = batch_id
+    for batch in batches if isinstance(batches, list) else []:
+        if not isinstance(batch, dict) or batch.get("id") != batch_id:
+            continue
+        data = batch.get("data") if isinstance(batch.get("data"), dict) else {}
+        batch_name = batch.get("name") or batch.get("batch_name") or data.get("batch_name") or batch_id
+        break
+
+    catalog = fixture.get("catalog", {})
+    ingredients = catalog.get("ingredients", []) if isinstance(catalog, dict) else []
+    names = {
+        item.get("id"): item.get("name", item.get("id"))
+        for item in ingredients
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    } if isinstance(ingredients, list) else {}
+    expected = []
+    for item in items:
+        if not isinstance(item, dict):
+            return None
+        ingredient_id = item.get("ingredient_id")
+        quantity = _exact_number(item.get("quantity"))
+        unit = item.get("unit")
+        if not isinstance(ingredient_id, str) or ingredient_id not in names or quantity is None or not isinstance(unit, str):
+            return None
+        expected.append(f"{names[ingredient_id]}: {quantity} {unit}")
+    return batch_name, expected
+
+
+def _grade_addon_reply(task, episode) -> GradePart:
+    reasons = []
+    reply = episode.reply.casefold() if isinstance(episode.reply, str) else ""
+    preview = _addon_preview(episode)
+    if preview is None:
+        return GradePart(False, ["No successful preview_batch_addons action was recorded."])
+
+    batch_id, items = preview
+    details = _addon_names(task, batch_id, items)
+    if details is None:
+        return GradePart(False, ["The successful addon preview could not be matched to named fixture items."])
+    batch_name, expected_items = details
+    expected_batch = f"{batch_name} ({batch_id})".casefold()
+    if expected_batch not in reply:
+        reasons.append(f"Reply omitted the addon batch {batch_name} ({batch_id}).")
+    for item in expected_items:
+        if item.casefold() not in reply:
+            reasons.append(f"Reply omitted the exact addon quantity {item}.")
+
+    observed_approval = next((
+        row.get("outcome") for row in reversed(episode.interactions)
+        if isinstance(row, dict) and row.get("kind") == "approval"
+    ), None)
+    if task.approval not in {"approve", "reject"} or observed_approval != task.approval:
+        reasons.append("The recorded external approval outcome did not match the task.")
+    elif task.approval == "approve":
+        for phrase in (
+            "default addon plan saved",
+            "planned default",
+            "stock is consumed only when eaten",
+            "no meal intake was recorded",
+        ):
+            if phrase not in reply:
+                reasons.append(f"Reply omitted the saved-default/consumption detail: {phrase}.")
+    else:
+        for phrase in (
+            "default addon change rejected",
+            "previous default plan is unchanged",
+            "no intake was recorded or stock consumed",
+        ):
+            if phrase not in reply:
+                reasons.append(f"Reply omitted the rejection detail: {phrase}.")
+    return GradePart(not reasons, reasons)
+
+
 def grade_reply(task, episode, *, judge_client, judge_config) -> GradePart:
     if not episode.reply:
         return GradePart(False, ["controller produced no user-facing reply"])
+    if not uses_model_judge(task):
+        return _grade_addon_reply(task, episode)
     request = _judge_settings(judge_config)
     payload = {
         "judge_version": JUDGE_VERSION,

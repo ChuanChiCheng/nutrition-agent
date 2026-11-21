@@ -198,6 +198,11 @@ class NutritionService:
         row=c.execute('SELECT version,data FROM batch_addons WHERE batch_id=%s ORDER BY version DESC LIMIT 1',(batch_id,)).fetchone()
         return row if row else {'version':0,'data':{'items':[]}}
 
+    def _addon_receipt(self,c,payload,outcome):
+        batch=self._batch(c,payload['batch_id'])
+        return {'outcome':outcome,'batch_id':payload['batch_id'],'batch_name':batch['name'],
+                'items':payload['items']}
+
     @safe
     def preview_batch_addons(self,batch_id,items):
         items=self._items(items)
@@ -277,7 +282,8 @@ class NutritionService:
                 elif kind=='preparation':result=self._apply_preparation(c,payload,request_id)
                 elif kind=='addons':
                     c.execute('INSERT INTO batch_addons VALUES(%s,%s,%s)',(payload['batch_id'],payload['version'],jsonb({'items':payload['items']})))
-                    result={'batch_id':payload['batch_id'],'addon_version':payload['version']}
+                    result={'batch_id':payload['batch_id'],'addon_version':payload['version'],
+                            'addon_receipt':self._addon_receipt(c,payload,'saved')}
                 elif kind=='correction':result=self._apply_correction(c,payload)
                 elif kind=='reconciled_meal':
                     self._apply_inventory(c,payload['inventory'])
@@ -290,9 +296,12 @@ class NutritionService:
     @safe
     def reject_preview(self,preview_id):
         with self.store.transaction(lock=True) as c:
-            row=c.execute("UPDATE previews SET status='rejected' WHERE id=%s AND status='pending' RETURNING id",(preview_id,)).fetchone()
+            row=c.execute("UPDATE previews SET status='rejected' WHERE id=%s AND status='pending' RETURNING id,kind,data",(preview_id,)).fetchone()
             if not row:raise ValueError('Preview is not pending')
-            return {'rejected':preview_id}
+            result={'rejected':preview_id}
+            if row['kind']=='addons':
+                result['addon_receipt']=self._addon_receipt(c,row['data']['payload'],'rejected')
+            return result
 
     @safe
     def find_batches(self,query):

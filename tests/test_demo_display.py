@@ -28,6 +28,40 @@ def test_meal_tool_receipt_identifies_saved_batch_date_and_meal_only_on_success(
         assert 'Batch: Synthetic curry lunch batch' not in text
 
 
+def test_confirmed_addon_receipt_names_batch_items_and_default_consumption_rule():
+    receipt = {
+        'outcome': 'saved',
+        'batch_id': 'batch-1',
+        'batch_name': 'Synthetic curry lunch batch',
+        'items': [{'ingredient_id': 'yogurt', 'name': 'Synthetic yogurt', 'quantity': '2',
+                   'unit': 'serving', 'state': 'packaged'}],
+    }
+
+    text = render(Result(True, {'addon_version': 1, 'addon_receipt': receipt}))
+
+    assert 'Default addon plan saved for Synthetic curry lunch batch (batch-1).' in text
+    assert 'Synthetic yogurt: 2 serving' in text
+    assert 'This is a planned default; stock is consumed only when eaten.' in text
+    assert 'No meal intake was recorded.' in text
+
+
+def test_rejected_addon_receipt_identifies_proposal_and_says_previous_plan_unchanged():
+    receipt = {
+        'outcome': 'rejected',
+        'batch_id': 'batch-1',
+        'batch_name': 'Synthetic curry lunch batch',
+        'items': [{'ingredient_id': 'oats', 'name': 'Synthetic oats', 'quantity': '30',
+                   'unit': 'g', 'state': 'dry'}],
+    }
+
+    text = render(Result(True, {'rejected': 'preview-1', 'addon_receipt': receipt}))
+
+    assert 'Default addon change rejected for Synthetic curry lunch batch (batch-1).' in text
+    assert 'Synthetic oats: 30 g' in text
+    assert 'The previous default plan is unchanged.' in text
+    assert 'No intake was recorded or stock consumed.' in text
+
+
 def test_proposal_shows_nutrition_cost_steps_and_gap_before_confirmation():
     from nutrition_demo.catalog import Catalog
     c=Catalog.load()

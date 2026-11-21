@@ -1,7 +1,7 @@
 """Versioned tool contract. Confirmation is deliberately absent from this registry."""
 from copy import deepcopy
 
-TOOL_VERSION='v1.0'
+TOOL_VERSION='v1.2'
 S={'type':'string'}
 NULLSTR={'type':['string','null']}
 Q={'type':['string','number']}
@@ -36,7 +36,8 @@ SCHEMAS={
                             'confirmed_dispositions':array(DISPOSITION)},['recipe_id','actual_usage','outputs','prepared_on']),
  'preview_batch_addons':obj({'batch_id':S,'items':ITEMS}),
  'find_batches':obj({'query':S}),
- 'batch_summary':obj({}),
+ 'batch_summary':obj({'batch_id':S},[]),
+ 'check_meal_targets':obj({'batch_id':S,'nutrients':NUTRIENTS},[]),
  'log_meal':obj({'batch_id':S,'eaten_on':S,'meal':NULLSTR,'addon_override':ADDONS}),
  'preview_reconciled_meal':obj({'items':ITEMS,'meal_input':obj({'batch_id':S,'eaten_on':S,'meal':NULLSTR,'addon_override':ADDONS}),
                                'mode':{'enum':['purchase','reconcile']}}),
@@ -52,16 +53,16 @@ DESCRIPTIONS={
  'preview_correction':'Preview correction to exactly identified event, preserving historical snapshots. Requires application confirmation.',
  'propose_recipe':'Only after user chooses a dish. Adjust quantities and at most a small permitted substitution, then authoritative exact calculation. Maximum 3 attempts.',
  'ask_user':'Ask one application-owned clarification by topic; no free-form execution or approval claims.',
+ 'batch_summary':'All prepared batches, or only batch_id when given: nutrients, remaining boxes, addons, and an exact per-box meal-target check.',
+ 'check_meal_targets':'Exactly check one box of batch_id, or hypothetical/user-given nutrients (give exactly one), against the saved meal targets. Records nothing.',
  'explain_cooking':'Answer a specific cooking question with exact verified source evidence IDs returned by get_recipe. Select at most four relevant excerpts.',
 }
 
 
-def tools(schemas=None,descriptions=None):
+def tools():
     # Non-strict schemas allow optional correction fields. Local validation remains mandatory.
-    registry=SCHEMAS if schemas is None else schemas
-    labels=DESCRIPTIONS if descriptions is None else descriptions
-    return [{'type':'function','name':name,'description':labels.get(name,name.replace('_',' ')),
-             'parameters':deepcopy(schema),'strict':False} for name,schema in registry.items()]
+    return [{'type':'function','name':name,'description':DESCRIPTIONS.get(name,name.replace('_',' ')),
+             'parameters':deepcopy(schema),'strict':False} for name,schema in SCHEMAS.items()]
 
 
 QUESTIONS={'profile': 'Provide separate meal and daily nutrient targets, timezone, equipment, and container capacity.', 'inventory': 'Confirm inventory quantities and identify purchases or corrections.', 'recipe': 'Which recipe would you like?', 'batch': 'Which batch did you eat?', 'event': 'Which meal record should be corrected?', 'addons': 'What addons and quantities did you actually eat, or were there none?', 'quantity': 'Provide the actual quantity, unit, and raw or cooked state.', 'date': 'What was the actual consumption date?', 'product_label': 'Provide the product nutrition label, reference quantity, and unit; unknown prices may remain unknown.', 'details': 'Provide the missing details before continuing.'}

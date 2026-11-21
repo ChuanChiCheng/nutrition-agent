@@ -54,43 +54,6 @@ def sample_results():
     ]
 
 
-def component_scored(task_id, repeat, reply_passed):
-    task = EvalTask(
-        id=task_id,
-        category="addons",
-        labels=set(),
-        fixture={"synthetic": True},
-        request="synthetic addon request",
-        scripted_answers=[],
-        approval="approve",
-        expected_changes=[],
-        required_order=[],
-        reply_rubric=["explain exact addon details"],
-    )
-    episode = EpisodeResult(
-        task_id=task_id,
-        controller="agent",
-        repeat=repeat,
-        status="complete",
-        reply="synthetic addon receipt",
-        trace=[],
-        interactions=[],
-        final_state={},
-        turns=1,
-        model_calls=1,
-        tool_calls=1,
-        input_tokens=10,
-        output_tokens=5,
-        latency_ms=100,
-        error=None,
-    )
-    state = GradePart(True, [])
-    order = GradePart(True, [])
-    reply = GradePart(reply_passed, [] if reply_passed else ["response rubric did not match"])
-    grade = EpisodeGrade(state.passed and order.passed and reply.passed, state, order, reply)
-    return ScoredEpisode(task, episode, grade)
-
-
 def test_report_computes_pass_at_3_pass_power_3_flips_and_percentile():
     from nutrition_eval.report import summarize_runs
 
@@ -110,26 +73,6 @@ def test_report_computes_pass_at_3_pass_power_3_flips_and_percentile():
     assert summary["agent"]["pass_power_3"] == pytest.approx(0.5)
     assert summary["agent"]["flipped_task_ids"] == ["T02"]
     assert summary["agent"]["accuracy_by_repeat"] == {1: 0.5, 2: 1.0, 3: 0.5}
-
-
-def test_component_report_separates_addon_reply_failures_from_state_and_order():
-    from nutrition_eval.report import _summary_markdown, summarize_runs
-
-    attempts = [(index, repeat) for index in range(1, 8) for repeat in range(1, 4)]
-    results = [
-        component_scored(f"A{index:02}", repeat, reply_passed=slot < 11)
-        for slot, (index, repeat) in enumerate(attempts)
-    ]
-
-    summary = summarize_runs(results)
-    addon = summary["by_category"]["agent"]["addons"]
-
-    assert addon["passed_count"] == 11
-    assert addon["sample_count"] == 21
-    assert addon["components"]["state"]["passed_count"] == 21
-    assert addon["components"]["order"]["passed_count"] == 21
-    assert addon["components"]["reply"]["passed_count"] == 11
-    assert "| agent | addons | 11/21 | 21/21 | 21/21 | 11/21 |" in _summary_markdown(summary, {})
 
 
 def test_report_saves_episode_samples_metadata_and_failure_analysis(tmp_path):
@@ -225,7 +168,6 @@ def test_fake_client_development_dry_run_is_marked_not_live(tmp_path):
     assert result == 0
     status = json.loads((tmp_path / "dry-run" / "status.json").read_text())
     assert status["run_mode"] == "dry_run"
-    assert status["metadata"]["reply_grader_version"] == "nutrition-reply-grader-v1"
     assert "not a live model comparison" in (tmp_path / "dry-run" / "summary.md").read_text()
 
 

@@ -198,11 +198,6 @@ class NutritionService:
         row=c.execute('SELECT version,data FROM batch_addons WHERE batch_id=%s ORDER BY version DESC LIMIT 1',(batch_id,)).fetchone()
         return row if row else {'version':0,'data':{'items':[]}}
 
-    def _addon_receipt(self,c,payload,outcome):
-        batch=self._batch(c,payload['batch_id'])
-        return {'outcome':outcome,'batch_id':payload['batch_id'],'batch_name':batch['name'],
-                'items':payload['items']}
-
     @safe
     def preview_batch_addons(self,batch_id,items):
         items=self._items(items)
@@ -282,8 +277,7 @@ class NutritionService:
                 elif kind=='preparation':result=self._apply_preparation(c,payload,request_id)
                 elif kind=='addons':
                     c.execute('INSERT INTO batch_addons VALUES(%s,%s,%s)',(payload['batch_id'],payload['version'],jsonb({'items':payload['items']})))
-                    result={'batch_id':payload['batch_id'],'addon_version':payload['version'],
-                            'addon_receipt':self._addon_receipt(c,payload,'saved')}
+                    result={'batch_id':payload['batch_id'],'addon_version':payload['version'],'items':payload['items']}
                 elif kind=='correction':result=self._apply_correction(c,payload)
                 elif kind=='reconciled_meal':
                     self._apply_inventory(c,payload['inventory'])
@@ -296,12 +290,9 @@ class NutritionService:
     @safe
     def reject_preview(self,preview_id):
         with self.store.transaction(lock=True) as c:
-            row=c.execute("UPDATE previews SET status='rejected' WHERE id=%s AND status='pending' RETURNING id,kind,data",(preview_id,)).fetchone()
+            row=c.execute("UPDATE previews SET status='rejected' WHERE id=%s AND status='pending' RETURNING id",(preview_id,)).fetchone()
             if not row:raise ValueError('Preview is not pending')
-            result={'rejected':preview_id}
-            if row['kind']=='addons':
-                result['addon_receipt']=self._addon_receipt(c,row['data']['payload'],'rejected')
-            return result
+            return {'rejected':preview_id}
 
     @safe
     def find_batches(self,query):
@@ -311,27 +302,16 @@ class NutritionService:
             return {'candidates':rows,'needs_clarification':len(rows)!=1}
 
     @safe
-    def assess_batch_targets(self,batch_id):
-        # The shared state lock makes the batch/profile/version snapshot coherent
-        # with concurrent writes, without changing any business data.
-        with self.store.transaction(lock=True) as c:
-            batch=self._batch(c,batch_id)
-            profile=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
-            if not profile or not profile['data'].get('meal_targets'):
-                raise ValueError('Configured meal targets are required')
-            actual=n(batch['data']['box_nutrients'])
-            targets=n(profile['data']['meal_targets'])
-            return {'state_version':self._version(c),'comparison':{
-                'batch_id':batch['id'],'batch_name':batch['name'],
-                'basis':'per_box','target_scope':'meal',
-                'sources':batch['data'].get('sources',[]),
-                **validate_targets(actual,targets)}}
-
-    @safe
-    def batch_summary(self):
+    def batch_summary(self,batch_id=None):
         with self.store.transaction() as c:
             batches=[]
-            for b in c.execute('SELECT * FROM batches ORDER BY cooking_run_id,name').fetchall():
+            profile=c.execute('SELECT data FROM profile WHERE id=1').fetchone()
+            meal_targets=profile['data'].get('meal_targets') if profile else None
+            rows=c.execute('SELECT * FROM batches ORDER BY cooking_run_id,name').fetchall()
+            if batch_id is not None:
+                rows=[b for b in rows if b['id']==batch_id]
+                if not rows:raise ValueError('Unknown batch')
+            for b in rows:
                 addons=self._addons(c,b['id']);box=n(b['data']['box_nutrients'])
                 addon_total=sum((n(i['nutrients']) for i in addons['data']['items']),ZERO)
                 cost=b['data']['box_cost']
@@ -341,7 +321,9 @@ class NutritionService:
                                 'addon_version':addons['version'],'meal_nutrients':asdict(box+addon_total),
                                 'box_cost':{**cost,'known_subtotal':decimal(cost['known_subtotal']),
                                             'total':decimal(cost['total']) if cost['total'] is not None else None},
-                                'sources':b['data']['sources'],'targets':b['data'].get('targets')})
+                                'sources':b['data']['sources'],'targets':b['data'].get('targets'),
+                                # Exact per-box check against the saved meal targets, computed by the application.
+                                'meal_target_check':validate_targets(box,n(meal_targets)) if meal_targets else None})
             return {'batches':batches}
 
     def _meal_payload(self,c,batch_id,eaten_on,meal=None,addon_override=None,*,check_stock=True):
@@ -365,7 +347,8 @@ class NutritionService:
                   (event,payload['batch_id'],payload['eaten_on'],payload['meal'],jsonb(payload)))
         c.execute('UPDATE batches SET remaining_boxes=remaining_boxes-1 WHERE id=%s',(payload['batch_id'],))
         for i in payload['addon_items']:self._move(c,i,-decimal(i['quantity']),'meal_addon',event=event)
-        return {'event_id':event,**payload}
+        remaining=c.execute('SELECT remaining_boxes FROM batches WHERE id=%s',(payload['batch_id'],)).fetchone()['remaining_boxes']
+        return {'event_id':event,**payload,'remaining_boxes':remaining}
 
     @safe
     def log_meal(self,batch_id,eaten_on,meal,request_id,addon_override=None):
@@ -420,20 +403,14 @@ class NutritionService:
     def find_events(self,query):
         allowed={'date','batch_id','meal','event_id'}
         if set(query)-allowed:raise ValueError('Unknown event search fields')
-        normalized_query=dict(query)
-        day=self._day(query['date']) if 'date' in query else None
-        if day:normalized_query['date']=day
-        if isinstance(query.get('meal'),str):normalized_query['meal']=query['meal'].strip().casefold()
         with self.store.transaction() as c:
             rows=c.execute('SELECT * FROM events ORDER BY eaten_on,id').fetchall()
+            day=self._day(query['date']) if 'date' in query else None
             rows=[r for r in rows if (not day or r['eaten_on'].isoformat()==day)
                   and ('batch_id' not in query or r['batch_id']==query['batch_id'])
-                  and ('meal' not in normalized_query or
-                       (r['meal'].strip().casefold() if isinstance(r['meal'],str) else r['meal'])==normalized_query['meal'])
+                  and ('meal' not in query or r['meal']==query['meal'])
                   and ('event_id' not in query or r['id']==query['event_id'])]
-            return {'entity':'meal_event','match_status':('no_match' if not rows else 'unique' if len(rows)==1 else 'multiple'),
-                    'query':normalized_query,'record_scope':'recorded_prepared_meals_only',
-                    'candidates':encode(rows),'needs_clarification':len(rows)>1}
+            return {'candidates':encode(rows),'needs_clarification':len(rows)!=1}
 
     def _event(self,c,event_id):
         row=c.execute('SELECT * FROM events WHERE id=%s',(event_id,)).fetchone()

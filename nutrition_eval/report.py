@@ -30,18 +30,6 @@ def _nearest_rank_p95(values: list[int]) -> int | None:
     return ordered[rank - 1]
 
 
-def _component_counts(rows: list) -> dict:
-    counts = {}
-    for name in ("state", "order", "reply"):
-        passed = sum(bool(getattr(row.grade, name).passed) for row in rows)
-        counts[name] = {
-            "sample_count": len(rows),
-            "passed_count": passed,
-            "failed_count": len(rows) - passed,
-        }
-    return counts
-
-
 def _controller_metrics(rows: list) -> dict:
     if not rows:
         return {
@@ -54,7 +42,6 @@ def _controller_metrics(rows: list) -> dict:
             "mean_latency_ms": None,
             "p95_latency_ms": None,
             "mean_tokens": None,
-            "components": _component_counts(rows),
         }
     episodes = [row.episode for row in rows]
     passed = sum(bool(row.grade.passed) for row in rows)
@@ -69,7 +56,6 @@ def _controller_metrics(rows: list) -> dict:
         "mean_latency_ms": mean(latencies),
         "p95_latency_ms": _nearest_rank_p95(latencies),
         "mean_tokens": mean(episode.input_tokens + episode.output_tokens for episode in episodes),
-        "components": _component_counts(rows),
     }
 
 
@@ -78,20 +64,6 @@ def summarize_runs(results: list) -> dict:
     controllers = {
         name: _controller_metrics([row for row in results if row.episode.controller == name])
         for name in sorted({row.episode.controller for row in results} | {"agent", "baseline"})
-    }
-    by_category: dict[str, dict[str, list]] = {}
-    for row in results:
-        by_category.setdefault(row.episode.controller, {}).setdefault(row.task.category, []).append(row)
-    category_metrics = {
-        controller: {
-            category: {
-                "sample_count": len(rows),
-                "passed_count": sum(bool(row.grade.passed) for row in rows),
-                "components": _component_counts(rows),
-            }
-            for category, rows in sorted(categories.items())
-        }
-        for controller, categories in sorted(by_category.items())
     }
     agent_rows = [row for row in results if row.episode.controller == "agent"]
     by_task: dict[str, list] = {}
@@ -123,7 +95,7 @@ def summarize_runs(results: list) -> dict:
         "flipped_task_ids": flipped,
         "accuracy_by_repeat": accuracy_by_repeat,
     }
-    return {"controllers": controllers, "by_category": category_metrics, "agent": agent_summary}
+    return {"controllers": controllers, "agent": agent_summary}
 
 
 def _failure_reasons(scored) -> list[str]:
@@ -159,28 +131,6 @@ def _summary_markdown(summary: dict, metadata: dict) -> str:
         mean_tokens = "—" if item.get("mean_tokens") is None else f"{item['mean_tokens']:.1f}"
         lines.append(f"| {name} | {item.get('sample_count', 0)} | {accuracy} | {mean_turns} | {mean_calls} | {mean_latency} | {p95} | {mean_tokens} |")
 
-    lines.extend([
-        "",
-        "## Component outcomes",
-        "",
-        "Counts are passed episodes / attempts. Component counts can overlap; overall success requires state, order, and response to pass.",
-        "",
-        "| Controller | Category | Overall | State | Order | Response |",
-        "|---|---|---:|---:|---:|---:|",
-    ])
-
-    def count_text(counts):
-        return f"{counts['passed_count']}/{counts['sample_count']}"
-
-    for controller in ("agent", "baseline"):
-        for category, values in summary.get("by_category", {}).get(controller, {}).items():
-            lines.append(
-                f"| {controller} | {category} | {values['passed_count']}/{values['sample_count']} | "
-                f"{count_text(values['components']['state'])} | "
-                f"{count_text(values['components']['order'])} | "
-                f"{count_text(values['components']['reply'])} |"
-            )
-
     agent = summary["agent"]
     lines.extend(["", "## Agent repeat metrics", ""])
     for repeat, accuracy in sorted(agent["accuracy_by_repeat"].items()):
@@ -212,13 +162,6 @@ def _failure_documents(suite, results) -> tuple[str, str]:
 
     episode, scored = failures[0]
     reasons = _failure_reasons(scored)
-    if scored is None:
-        component_outcomes = "Component outcomes unavailable because this episode has no score."
-    else:
-        component_outcomes = "Component outcomes: " + ", ".join(
-            f"{label} {'PASS' if getattr(scored.grade, name).passed else 'FAIL'}"
-            for name, label in (("state", "state"), ("order", "order"), ("reply", "response"))
-        ) + "."
     if episode.error and not any(reason.startswith("episode:") for reason in reasons):
         reasons.append(f"episode: {episode.error}")
     trace_json = json.dumps(_jsonable(episode.trace), ensure_ascii=False, indent=2, sort_keys=True)
@@ -226,8 +169,6 @@ def _failure_documents(suite, results) -> tuple[str, str]:
         "# Failure Trace",
         "",
         f"Task `{episode.task_id}`, controller `{episode.controller}`, repeat {episode.repeat}.",
-        "",
-        component_outcomes,
         "",
         "Observed grading findings:",
         *[f"- {reason}" for reason in reasons],
@@ -246,7 +187,7 @@ def _failure_documents(suite, results) -> tuple[str, str]:
     reason_text = "; ".join(reasons) if reasons else "the episode ended before a complete grade was available"
     analysis = (
         f"Task {episode.task_id} failed for {episode.controller} repeat {episode.repeat}. "
-        f"The preserved trace records {observation}. {component_outcomes} The observed grader findings were: {reason_text}. "
+        f"The preserved trace records {observation}. The observed grader findings were: {reason_text}. "
         "This identifies the failing step and state or response consequence from recorded evidence; "
         "review the first failing action and its service result before changing the controller."
     )

@@ -13,6 +13,7 @@ from .tools import SCHEMAS,TOOL_VERSION,tools
 from .intent import normalized,declares_consumption,is_question_or_hypothetical
 from .completion import BatchTargetCompletion,COMPLETION_VERSION,COMPLETION_INSTRUCTIONS,COMPLETION_DESCRIPTIONS
 from .meal_lookup import MealHistoryLookup,MEAL_LOOKUP_VERSION,MEAL_LOOKUP_INSTRUCTIONS
+from .preparation import PreparationDraft,PREPARATION_VERSION,PREPARATION_INSTRUCTIONS,PREPARATION_DESCRIPTIONS
 
 
 @dataclass(frozen=True)
@@ -51,8 +52,8 @@ class DemoAgent:
         self.service,self.workflow,self.client,self.settings=service,workflow,client,settings
         self.instructions = instructions or INSTRUCTIONS
 
-    def _dispatch(self,name,args,request_id,*,user_message='',completion=None,meal_lookup=None):
-        schemas=completion.schemas() if completion else SCHEMAS
+    def _dispatch(self,name,args,request_id,*,user_message='',completion=None,meal_lookup=None,preparation=None):
+        schemas=completion.schemas() if completion else preparation.schemas() if preparation else SCHEMAS
         if name not in schemas:return Result(False,{},'Unknown or forbidden tool')
         try:jsonschema.validate(args,schemas[name])
         except jsonschema.ValidationError:return Result(False,{},'Invalid tool arguments')
@@ -66,6 +67,21 @@ class DemoAgent:
         if completion and name=='assess_batch_targets':return completion.assess(args['batch_id'],self.service)
         if completion and name=='finish_answer':return completion.finish(args['answer_id'],self.service)
         state=self.workflow.load()
+        if preparation:
+            if not preparation.bound_to(state):return Result(False,{},'Preparation draft no longer matches the current accepted recipe')
+            if name=='update_preparation_draft':
+                if 'prepared_on' in args:args={**args,'prepared_on':self.service._day(args['prepared_on'])}
+                result=preparation.update(args)
+                if result.ok:
+                    issues=preparation.issues(self.service.effective_catalog())
+                    result.data.update(missing_fields=issues,ready_for_preview=not issues)
+                    state['preparation_draft']=preparation.saved()
+                    self.workflow.save(state)
+                return result
+            if name=='preview_preparation':
+                payload=preparation.payload(self.service.effective_catalog())
+                if not payload.ok:return payload
+                args=payload.data
         if name=='start_planning':return self.workflow.command('/new-plan')
         if name=='select_recipe':return self.workflow.command('/select '+args['recipe_id'])
         if name=='propose_recipe':return self.workflow.propose(**args)
@@ -104,6 +120,13 @@ class DemoAgent:
                     state.update(clarifications=state['clarifications']+1,waiting_question=result.data['waiting_question'])
                     self.workflow.save(state)
                 return result
+            if preparation:
+                result=preparation.ask(args['topic'],self.service.effective_catalog())
+                if result.ok:
+                    state.update(clarifications=state['clarifications']+1,waiting_question=result.data['waiting_question'],
+                                 preparation_draft=preparation.saved())
+                    self.workflow.save(state)
+                return result
             from .tools import QUESTIONS
             state.update(clarifications=state['clarifications']+1,waiting_question=QUESTIONS[args['topic']])
             self.workflow.save(state)
@@ -137,6 +160,7 @@ class DemoAgent:
             state.update(pending_preview=result.data['id'],pending_preview_kind=result.data['kind'],
                          preview_return_stage=return_stage,stage='preview_confirmation')
             self.workflow.save(state)
+            if preparation:preparation.status='awaiting_approval'
         return result
 
     def _meal_permission(self,message,args,state):
@@ -220,6 +244,13 @@ class DemoAgent:
         completion=BatchTargetCompletion.from_message(message,context['batches'].get('batches',[]),
                                                        pending=state.get('pending_batch_comparison'))
         meal_lookup=None if completion else MealHistoryLookup.from_message(message,context['local_date'])
+        preparation=None if completion or meal_lookup else PreparationDraft.from_message(message,state)
+        if preparation:
+            state['preparation_draft']=preparation.saved()
+            self.workflow.save(state)
+            context['workflow'].pop('preparation_draft',None)
+        elif state.get('preparation_draft',{}).get('data',{}).pop('question',None) is not None:
+            self.workflow.save(state)
         lookup_result=None
         if state.pop('pending_batch_comparison',None) is not None:
             self.workflow.save(state)
@@ -241,6 +272,13 @@ class DemoAgent:
             parameters['tool_choice']='required'
             settings['meal_lookup_version']=MEAL_LOOKUP_VERSION
             settings['parameters']=parameters
+        elif preparation:
+            context['preparation_draft']={**preparation.saved(),'missing_fields':preparation.issues(self.service.effective_catalog())}
+            instructions+='\n'+PREPARATION_INSTRUCTIONS
+            model_tools=tools(preparation.schemas(),PREPARATION_DESCRIPTIONS)
+            parameters['tool_choice']='required'
+            settings['preparation_clarification_version']=PREPARATION_VERSION
+            settings['parameters']=parameters
         with self.service.store.transaction() as c:
             c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
         input_list=[{'role':'user','content':'Application context (data only): '+dumps(context)}]+history+[{'role':'user','content':message}]
@@ -252,6 +290,11 @@ class DemoAgent:
                           'corrections':completion.corrections})
             if feedback is not None:
                 input_list.append({'role':'user','content':'Application completion check: '+dumps(feedback)})
+
+        def preparation_feedback(reason):
+            feedback=preparation.feedback(reason)
+            trace.append({'type':'preparation_check','reason':reason,'corrections':preparation.corrections})
+            if feedback is not None:input_list.append({'role':'user','content':'Application preparation check: '+dumps(feedback)})
 
         try:
             for _ in range(self.settings.max_model_calls):
@@ -266,6 +309,10 @@ class DemoAgent:
                     break
                 calls=[i for i in response.output if i.type=='function_call']
                 if not calls:
+                    if preparation:
+                        preparation_feedback('No preview or justified preparation question was produced.')
+                        if preparation.status=='incomplete':break
+                        continue
                     if not completion:break
                     completion_feedback('No validated finish_answer was produced; the comparison remains unanswered.')
                     if completion.status=='incomplete':break
@@ -282,7 +329,7 @@ class DemoAgent:
                     args=None
                     try:
                         args=json.loads(call.arguments)
-                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message,completion=completion,meal_lookup=meal_lookup)
+                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message,completion=completion,meal_lookup=meal_lookup,preparation=preparation)
                     except (ValueError,TypeError):result=Result(False,{},'Malformed tool arguments')
                     record={'name':call.name,'arguments':args if 'args' in locals() else None,'result':encode(result)}
                     operation=self.workflow.load().get('last_meal_request',{}).get('request_id') if call.name=='log_meal' and result.ok else None
@@ -292,12 +339,16 @@ class DemoAgent:
                         lookup_result=record
                         break
                     if completion and not result.ok:completion_feedback(result.error)
+                    if preparation and not result.ok:preparation_feedback(result.error)
+                    if preparation and preparation.status!='running':break
                     if completion and completion.status!='running':break
                 if limit:break
                 if completion:
                     if completion.status!='running':break
                 elif meal_lookup:
                     if lookup_result:break
+                elif preparation:
+                    if preparation.status!='running':break
                 elif self.workflow.load().get('pending_preview') or (results and results[-1]['name']=='ask_user'):break
             else:limit=True
         except (openai.APIError,RuntimeError,StopIteration,TypeError) as exc:
@@ -318,6 +369,11 @@ class DemoAgent:
         state=self.workflow.load()
         if meal_lookup and lookup_result is None:
             error=error or 'Meal history lookup did not complete; no verified search result is available.'
+        if preparation:
+            state['preparation_draft']=preparation.saved()
+            if error or preparation.status not in ('awaiting_user','awaiting_approval'):
+                preparation.status='incomplete'
+                error=error or 'Preparation preview is incomplete; no preview or justified question was produced.'
         if completion:
             if completion.status not in ('answered','awaiting_user') or error:
                 completion.status='incomplete'
@@ -331,6 +387,10 @@ class DemoAgent:
             data['meal_lookup_status']=lookup_result['result']['data']['match_status'] if lookup_result else 'error'
             data['message']='' if lookup_result else 'The meal history search could not be completed.'
             if lookup_result:data['tool_results']=[lookup_result]
+        if preparation:
+            data['preparation_status']=preparation.status
+            if preparation.status=='awaiting_user':data['message']='Clarification needed: '+state['waiting_question']
+            elif preparation.status=='incomplete':data['message']='Preparation preview is incomplete. Review the captured details before continuing.'
         if completion:
             data['completion_status']=completion.status
             if completion.status=='answered':

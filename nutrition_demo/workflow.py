@@ -30,6 +30,7 @@ class Workflow:
             if not state['inventory_confirmed']:return Result(False,{},'Confirm current inventory before selecting recipe')
             try:self.service.catalog.recipe(parts[1])
             except ValueError as e:return Result(False,{},str(e))
+            state.pop('preparation_draft',None)
             state.update(selected_recipe=parts[1],stage='customization',attempts=0,proposal=None,accepted_recipe=None)
             result=Result(True,{'selected_recipe':parts[1]})
         elif cmd=='/accept-recipe' and len(parts) in (2,3):
@@ -37,6 +38,7 @@ class Workflow:
             if not p or p['id']!=parts[1]:return Result(False,{},'Select a current calculated proposal')
             if not p['calculation']['targets']['passed'] and parts[2:]!=['outside']:
                 return Result(False,{},'Outside targets; explicitly accept with outside to retain unmet status')
+            state.pop('preparation_draft',None)
             state.update(stage='cooking',accepted_recipe=p['id'])
             result=Result(True,{'accepted_recipe':p,'message':'Recipe accepted. Confirm actual usage and batches after cooking.'})
         elif cmd in ('/confirm','/reject') and len(parts)==2:
@@ -56,6 +58,7 @@ class Workflow:
                 if result.ok:state.update(pending_preview=None,stage=state.get('preview_return_stage','ready'),preview_return_stage=None,pending_preview_kind=None)
         elif cmd=='/new-plan':
             state.pop('pending_batch_comparison',None)
+            state.pop('preparation_draft',None)
             if state.get('pending_preview'):self.service.reject_preview(state['pending_preview'])
             state.update(pending_preview=None,preview_return_stage=None,pending_preview_kind=None,stage='inventory_confirmation',inventory_confirmed=False,selected_recipe=None,proposal=None,
                          accepted_recipe=None,attempts=0,clarifications=0,waiting_question=None)

@@ -12,6 +12,7 @@ from .store import jsonb
 from .tools import SCHEMAS,TOOL_VERSION,tools
 from .intent import normalized,declares_consumption,is_question_or_hypothetical
 from .completion import BatchTargetCompletion,COMPLETION_VERSION,COMPLETION_INSTRUCTIONS,COMPLETION_DESCRIPTIONS
+from .meal_lookup import MealHistoryLookup,MEAL_LOOKUP_VERSION,MEAL_LOOKUP_INSTRUCTIONS
 
 
 @dataclass(frozen=True)
@@ -50,11 +51,18 @@ class DemoAgent:
         self.service,self.workflow,self.client,self.settings=service,workflow,client,settings
         self.instructions = instructions or INSTRUCTIONS
 
-    def _dispatch(self,name,args,request_id,*,user_message='',completion=None):
+    def _dispatch(self,name,args,request_id,*,user_message='',completion=None,meal_lookup=None):
         schemas=completion.schemas() if completion else SCHEMAS
         if name not in schemas:return Result(False,{},'Unknown or forbidden tool')
         try:jsonschema.validate(args,schemas[name])
         except jsonschema.ValidationError:return Result(False,{},'Invalid tool arguments')
+        if meal_lookup:
+            if name!='find_events':return Result(False,{},'Use find_events for this read-only meal history lookup.')
+            query=dict(args['query'])
+            if 'date' in query:query['date']=self.service._day(query['date'])
+            if isinstance(query.get('meal'),str):query['meal']=query['meal'].strip().casefold()
+            if query!=meal_lookup.query:
+                return Result(False,{},'Search criteria do not match the requested date and meal. Do not broaden or add filters.')
         if completion and name=='assess_batch_targets':return completion.assess(args['batch_id'],self.service)
         if completion and name=='finish_answer':return completion.finish(args['answer_id'],self.service)
         state=self.workflow.load()
@@ -211,6 +219,8 @@ class DemoAgent:
                  'catalog':self.service.effective_catalog().data,'local_date':self.service._day('today')}
         completion=BatchTargetCompletion.from_message(message,context['batches'].get('batches',[]),
                                                        pending=state.get('pending_batch_comparison'))
+        meal_lookup=None if completion else MealHistoryLookup.from_message(message,context['local_date'])
+        lookup_result=None
         if state.pop('pending_batch_comparison',None) is not None:
             self.workflow.save(state)
             context['workflow'].pop('pending_batch_comparison',None)
@@ -223,6 +233,13 @@ class DemoAgent:
             model_tools=tools(completion.schemas(),COMPLETION_DESCRIPTIONS)
             parameters['tool_choice']='required'
             settings['completion_contract']=COMPLETION_VERSION
+            settings['parameters']=parameters
+        elif meal_lookup:
+            context['meal_lookup']={'query':meal_lookup.query,'record_scope':'recorded_prepared_meals_only'}
+            instructions+='\n'+MEAL_LOOKUP_INSTRUCTIONS
+            model_tools=tools({'find_events':SCHEMAS['find_events']})
+            parameters['tool_choice']='required'
+            settings['meal_lookup_version']=MEAL_LOOKUP_VERSION
             settings['parameters']=parameters
         with self.service.store.transaction() as c:
             c.execute('INSERT INTO agent_runs(id,settings) VALUES(%s,%s)',(run,jsonb(settings)))
@@ -265,17 +282,22 @@ class DemoAgent:
                     args=None
                     try:
                         args=json.loads(call.arguments)
-                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message,completion=completion)
+                        result=self._dispatch(call.name,args,run+':'+call.call_id,user_message=message,completion=completion,meal_lookup=meal_lookup)
                     except (ValueError,TypeError):result=Result(False,{},'Malformed tool arguments')
                     record={'name':call.name,'arguments':args if 'args' in locals() else None,'result':encode(result)}
                     operation=self.workflow.load().get('last_meal_request',{}).get('request_id') if call.name=='log_meal' and result.ok else None
                     results.append(record);trace.append({'type':'tool',**record,'call_id':call.call_id,'request_id':operation})
                     input_list.append({'type':'function_call_output','call_id':call.call_id,'output':dumps(result)})
+                    if meal_lookup and result.ok and meal_lookup.accepts(result.data):
+                        lookup_result=record
+                        break
                     if completion and not result.ok:completion_feedback(result.error)
                     if completion and completion.status!='running':break
                 if limit:break
                 if completion:
                     if completion.status!='running':break
+                elif meal_lookup:
+                    if lookup_result:break
                 elif self.workflow.load().get('pending_preview') or (results and results[-1]['name']=='ask_user'):break
             else:limit=True
         except (openai.APIError,RuntimeError,StopIteration,TypeError) as exc:
@@ -294,6 +316,8 @@ class DemoAgent:
                     state['last_meal_request']=receipt
                     self.workflow.save(state)
         state=self.workflow.load()
+        if meal_lookup and lookup_result is None:
+            error=error or 'Meal history lookup did not complete; no verified search result is available.'
         if completion:
             if completion.status not in ('answered','awaiting_user') or error:
                 completion.status='incomplete'
@@ -303,6 +327,10 @@ class DemoAgent:
                                   {'role':'assistant','content':dumps({'tool_results':results,'error':error})}])[-20:]
         self.workflow.save(state)
         data=self._display(results,limit)
+        if meal_lookup:
+            data['meal_lookup_status']=lookup_result['result']['data']['match_status'] if lookup_result else 'error'
+            data['message']='' if lookup_result else 'The meal history search could not be completed.'
+            if lookup_result:data['tool_results']=[lookup_result]
         if completion:
             data['completion_status']=completion.status
             if completion.status=='answered':

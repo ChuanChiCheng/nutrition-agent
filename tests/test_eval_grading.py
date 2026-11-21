@@ -325,6 +325,116 @@ def test_reply_judge_parses_each_rubric_criterion_and_excludes_usage():
     assert "State the inventory quantity." in prompt
 
 
+def _formal_addon_case(task_id, reply, *, repeat=1, preview_id='preview-one'):
+    from pathlib import Path
+    from nutrition_eval.tasks import load_tasks
+
+    root=Path(__file__).resolve().parents[1]
+    task=next(task for task in load_tasks(root/'tasks.jsonl') if task.id==task_id)
+    ingredient_id,quantity,unit={
+        'A02':('yogurt','2','serving'),
+        'A06':('oats','30','g'),
+    }[task_id]
+    episode=EpisodeResult(**{
+        **episode_result(reply=reply).__dict__,
+        'task_id':task_id,
+        'repeat':repeat,
+        'trace':[{
+            'type':'tool','name':'preview_batch_addons',
+            'arguments':{'batch_id':'batch-1','items':[{'ingredient_id':ingredient_id,'quantity':quantity,'unit':unit}]},
+            'result':{'ok':True,'data':{'id':preview_id}},
+        }],
+        'interactions':[{'kind':'approval','outcome':task.approval}],
+    })
+    return task,episode
+
+
+def test_addon_reply_uses_deterministic_receipt_check_without_calling_judge():
+    from nutrition_eval.grading import grade_reply
+
+    task,episode=_formal_addon_case(
+        'A02',
+        'Default addon plan saved for Synthetic curry lunch batch (batch-1).\n'
+        '  • Synthetic yogurt: 2 serving (packaged)\n'
+        'This is a planned default; stock is consumed only when eaten.\n'
+        'No meal intake was recorded.',
+    )
+    judge=FakeJudgeClient([{'index':0,'passed':False,'reason':'Deliberately inconsistent model answer.'}])
+
+    result=grade_reply(task,episode,judge_client=judge,judge_config=judge_config())
+
+    assert result.passed
+    assert result.usage=={}
+    assert judge.calls==[]
+
+
+def test_rejected_addon_reply_is_checked_for_exact_proposal_and_no_change():
+    from nutrition_eval.grading import grade_reply
+
+    task,episode=_formal_addon_case(
+        'A06',
+        'Default addon change rejected for Synthetic curry lunch batch (batch-1).\n'
+        '  • Synthetic oats: 30 g (dry)\n'
+        'The previous default plan is unchanged.\n'
+        'No intake was recorded or stock consumed.',
+    )
+    judge=FakeJudgeClient()
+
+    result=grade_reply(task,episode,judge_client=judge,judge_config=judge_config())
+
+    assert result.passed
+    assert judge.calls==[]
+
+
+def test_addon_reply_without_exact_quantity_fails_deterministically():
+    from nutrition_eval.grading import grade_reply
+
+    task,episode=_formal_addon_case(
+        'A02','Default addon plan saved; no intake recorded or stock consumed.'
+    )
+    judge=FakeJudgeClient([{'index':0,'passed':True,'reason':'The preview is sufficient.'}])
+
+    result=grade_reply(task,episode,judge_client=judge,judge_config=judge_config())
+
+    assert not result.passed
+    assert any('Synthetic yogurt: 2 serving' in reason for reason in result.reasons)
+    assert judge.calls==[]
+
+
+def test_semantically_identical_addon_repeats_get_identical_reply_grades():
+    from nutrition_eval.grading import grade_reply
+
+    first_task,first=_formal_addon_case(
+        'A02',
+        'Default addon plan saved for Synthetic curry lunch batch (batch-1).\n'
+        '  • Synthetic yogurt: 2 serving (packaged)\n'
+        'This is a planned default; stock is consumed only when eaten.\n'
+        'No meal intake was recorded.',
+        repeat=1,preview_id='random-preview-1',
+    )
+    second_task,second=_formal_addon_case(
+        'A02',first.reply,repeat=2,preview_id='random-preview-2'
+    )
+    judge=FakeJudgeClient()
+
+    first_grade=grade_reply(first_task,first,judge_client=judge,judge_config=judge_config())
+    second_grade=grade_reply(second_task,second,judge_client=judge,judge_config=judge_config())
+
+    assert first_grade==second_grade
+    assert judge.calls==[]
+
+
+def test_formal_run_plans_model_judge_calls_only_for_model_graded_task_episodes():
+    from pathlib import Path
+    from nutrition_eval.__main__ import _planned_judge_calls
+    from nutrition_eval.tasks import load_tasks
+
+    root=Path(__file__).resolve().parents[1]
+    tasks=load_tasks(root/'tasks.jsonl')
+
+    assert _planned_judge_calls(tasks)==172
+
+
 def test_judge_outage_marks_suite_incomplete_without_final_metrics():
     from nutrition_eval.grading import JudgeUnavailable, grade_suite
     from nutrition_eval.contracts import SuiteResult

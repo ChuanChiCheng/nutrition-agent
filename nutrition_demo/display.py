@@ -120,6 +120,22 @@ def event_search(data):
 def data_lines(data):
     if 'batch_target_answer' in data:return batch_target_answer(data['batch_target_answer'])
     if data.get('entity')=='meal_event':return event_search(data)
+    if 'addon_receipt' in data:
+        receipt=data['addon_receipt']
+        lines=[]
+        if receipt['outcome']=='saved':
+            lines.append(f"Default addon plan saved for {receipt['batch_name']} ({receipt['batch_id']}).")
+        else:
+            lines.append(f"Default addon change rejected for {receipt['batch_name']} ({receipt['batch_id']}).")
+        for item in receipt['items']:
+            amount=exact_number(item['quantity'])
+            state=f" ({item['state']})" if item.get('state') else ''
+            lines.append(f"  • {item.get('name',item['ingredient_id'])}: {amount} {item['unit']}{state}")
+        if receipt['outcome']=='saved':
+            lines += ['This is a planned default; stock is consumed only when eaten.','No meal intake was recorded.']
+        else:
+            lines += ['The previous default plan is unchanged.','No intake was recorded or stock consumed.']
+        return lines
     if 'preparation_details' in data:
         draft=data['preparation_details']
         lines=['Preparation details captured (not saved):']

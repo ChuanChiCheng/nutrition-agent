@@ -95,9 +95,37 @@ def test_addon_confirmation_does_not_consume(prepared):
     s,b=prepared
     p=s.preview_batch_addons(b,[{'ingredient_id':'yogurt','quantity':1,'unit':'serving','state':'packaged'}])
     assert p.ok,p
-    assert s.confirm_preview(p.data['id'],'addons').ok
+    confirmed=s.confirm_preview(p.data['id'],'addons')
+    assert confirmed.ok
+    receipt=confirmed.data['addon_receipt']
+    assert receipt['outcome']=='saved'
+    assert receipt['batch_id']==b
+    assert receipt['batch_name']=='meal'
+    assert [(i['ingredient_id'],i['quantity'],i['unit']) for i in receipt['items']]==[('yogurt','1','serving')]
     assert quantities(s)['yogurt']==10
     assert s.store.info()['counts']['events']==0
+
+
+def test_rejected_addon_preview_returns_receipt_and_preserves_plan_stock_and_meals(prepared):
+    s,b=prepared
+    previous=s.preview_batch_addons(b,[{'ingredient_id':'yogurt','quantity':1,'unit':'serving','state':'packaged'}])
+    assert s.confirm_preview(previous.data['id'],'previous-addon').ok
+    before_stock=quantities(s)
+    before_plan=s.batch_summary().data['batches'][0]['default_addons']
+    before_events=s.store.info()['counts']['events']
+
+    proposed=s.preview_batch_addons(b,[{'ingredient_id':'yogurt','quantity':2,'unit':'serving','state':'packaged'}])
+    rejected=s.reject_preview(proposed.data['id'])
+
+    assert rejected.ok
+    receipt=rejected.data['addon_receipt']
+    assert receipt['outcome']=='rejected'
+    assert receipt['batch_id']==b
+    assert receipt['batch_name']=='meal'
+    assert [(i['ingredient_id'],i['quantity'],i['unit']) for i in receipt['items']]==[('yogurt','2','serving')]
+    assert quantities(s)==before_stock
+    assert s.batch_summary().data['batches'][0]['default_addons']==before_plan
+    assert s.store.info()['counts']['events']==before_events
 
 
 def test_profile_requires_separate_daily_target(service):

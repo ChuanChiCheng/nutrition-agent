@@ -120,6 +120,15 @@ def event_search(data):
 def data_lines(data):
     if 'batch_target_answer' in data:return batch_target_answer(data['batch_target_answer'])
     if data.get('entity')=='meal_event':return event_search(data)
+    if 'preparation_details' in data:
+        draft=data['preparation_details']
+        lines=['Preparation details captured (not saved):']
+        for item in draft['actual_usage']:
+            amount=exact_number(item['quantity']) if 'quantity' in item else 'quantity missing'
+            lines.append(f"  {item['ingredient_id']}: {amount} {item.get('unit','unit missing')}({item.get('state','state missing')})")
+        if draft.get('prepared_on'):lines.append('Prepared on: '+draft['prepared_on'])
+        for output in draft['outputs']:lines.append(f"  {output['name']}: {output.get('boxes','count missing')} boxes")
+        return lines
     if 'explanation' in data:
         answer=data['explanation'];lines=[answer['recipe_name']+' | Explanation with source evidence']
         for evidence in answer['evidence']:

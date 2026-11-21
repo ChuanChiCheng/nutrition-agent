@@ -19,7 +19,7 @@ from .controllers import agent_factory
 from .baseline import BASELINE_VERSION, baseline_factory
 from .episode import RESPONSE_CAPTURE_VERSION
 from .grading import JudgeUnavailable, _apply_changes, grade_episode, grade_suite
-from .judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA, JUDGE_VERSION, REPLY_GRADER_VERSION, uses_model_judge
+from .judge import JUDGE_INSTRUCTIONS, JUDGE_SCHEMA, JUDGE_VERSION
 from .report import summarize_runs, write_run_artifacts
 from .state import normalize_state
 from .tasks import load_tasks, validate_taskset
@@ -45,11 +45,6 @@ def _database_migration_manifest() -> list[dict[str, str]]:
 def _judge_schema_sha256() -> str:
     payload = json.dumps(JUDGE_SCHEMA, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _planned_judge_calls(tasks) -> int:
-    """There are three agent repeats and one baseline episode per task."""
-    return 4 * sum(uses_model_judge(task) for task in tasks)
 
 
 def _source_tree_sha256() -> str:
@@ -307,7 +302,6 @@ def main(argv=None) -> int:
         "judge_model_id": config.judge_model_id,
         "judge_parameters": dict(config.judge_parameters),
         "judge_version": raw_config.get("judge_version"),
-        "reply_grader_version": REPLY_GRADER_VERSION,
         "response_capture_version": RESPONSE_CAPTURE_VERSION,
         "baseline_version": BASELINE_VERSION,
         "judge_instructions": JUDGE_INSTRUCTIONS,
@@ -327,7 +321,7 @@ def main(argv=None) -> int:
         "database_migration_version": raw_config["database_migration_version"],
         "model_service_host": urlsplit(os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").hostname,
         "planned_controller_episodes": len(tasks) * 4,
-        "planned_judge_calls": _planned_judge_calls(tasks),
+        "planned_judge_calls": len(tasks) * 4,
     }
     if database:
         metadata["database"] = database

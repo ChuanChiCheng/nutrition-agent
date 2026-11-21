@@ -14,26 +14,22 @@ def nutrients(n):
     return f"{number(n['kcal'])} kcal | Protein {number(n['protein_g'])} g | Carbohydrates {number(n['carbs_g'])} g | Fat {number(n['fat_g'])} g"
 
 
-def exact_number(value):
-    text=format(Decimal(str(value)),'f')
-    return text.rstrip('0').rstrip('.') if '.' in text else text
-
-
-def batch_target_answer(answer):
-    lines=[answer['batch_name']+' | Per-box comparison against configured meal targets.']
-    for key,label,unit in (('kcal','Calories','kcal'),('protein_g','Protein','g'),
-                           ('carbs_g','Carbohydrates','g'),('fat_g','Fat','g')):
-        metric=answer['metrics'][key]
-        value=lambda field:exact_number(metric[field])
-        lines.append(f"{label}: Actual {value('actual')} {unit} | Target {value('target')} {unit} | Allowed {value('lower')}–{value('upper')} {unit} | Difference {value('difference')} {unit} | "+('Pass' if metric['passed'] else 'Fail'))
-    lines.append('Overall meal-target status: '+('Pass; all four nutrients are within their allowed ranges.' if answer['passed'] else 'Fail; one or more nutrients are outside their allowed ranges.'))
-    statuses=sorted({source.get('status','unknown') for source in answer['sources']})
-    lines.append('Source status: '+(', '.join(statuses) or 'unknown'))
-    return lines
-
-
 def items(values):
     return '\n'.join(f"  • {i.get('name',i.get('ingredient_id',''))}: {number(i['quantity'])} {i['unit']}({i.get('state','')})" for i in values) or '  None'
+
+
+LABELS={'kcal':('Calories','kcal'),'protein_g':('Protein','g'),'carbs_g':('Carbohydrates','g'),'fat_g':('Fat','g')}
+
+
+def target_check(check,heading):
+    """Exact application-computed comparison with the meal targets; no model judgement."""
+    lines=[heading+': '+('all four nutrients pass' if check['passed'] else 'not all four nutrients pass, so the overall result fails')]
+    for key,v in check['metrics'].items():
+        label,unit=LABELS.get(key,(key,''))
+        lines.append(f"    {label}: actual {number(v['actual'])} {unit}; target {number(v['target'])} {unit}; "
+                     f"allowed {number(v['lower'])}–{number(v['upper'])} {unit}; difference {number(v['difference'])}; "
+                     +('Pass' if v['passed'] else 'Fail'))
+    return lines
 
 
 def cost(c):
@@ -96,55 +92,7 @@ def recipe(r):
     return '\n'.join(lines)
 
 
-def event_search(data):
-    query=data['query']
-    labels={'date':'Date','meal':'Meal','batch_id':'Batch','event_id':'Record'}
-    criteria='; '.join(labels[key]+'='+str(value) for key,value in query.items()) or 'All saved events'
-    lines=['Search: '+criteria]
-    if data['match_status']=='no_match':
-        lines+=['No recorded prepared meals match this search.',
-                'The dish and exact nutrition are unknown from these saved records. This does not mean zero intake.']
-    else:
-        lines.append('Matching recorded prepared meals:')
-        for event in data['candidates']:
-            snapshot=event.get('data',{})
-            lines.append(f"  {event['id']} | {event['eaten_on']} | {event.get('meal') or 'Meal unspecified'} | {snapshot.get('batch_name',event['batch_id'])}")
-            total=snapshot.get('total_nutrients')
-            if isinstance(total,dict) and all(total.get(key) is not None for key in ('kcal','protein_g','carbs_g','fat_g')):
-                lines.append('  Saved nutrition: '+nutrients(total))
-            else:lines.append('  Nutrition is unavailable for this saved record.')
-    lines.append('Search coverage: recorded prepared meals only; other meals, drinks, and snacks may be unrecorded.')
-    return lines
-
-
 def data_lines(data):
-    if 'batch_target_answer' in data:return batch_target_answer(data['batch_target_answer'])
-    if data.get('entity')=='meal_event':return event_search(data)
-    if 'addon_receipt' in data:
-        receipt=data['addon_receipt']
-        lines=[]
-        if receipt['outcome']=='saved':
-            lines.append(f"Default addon plan saved for {receipt['batch_name']} ({receipt['batch_id']}).")
-        else:
-            lines.append(f"Default addon change rejected for {receipt['batch_name']} ({receipt['batch_id']}).")
-        for item in receipt['items']:
-            amount=exact_number(item['quantity'])
-            state=f" ({item['state']})" if item.get('state') else ''
-            lines.append(f"  • {item.get('name',item['ingredient_id'])}: {amount} {item['unit']}{state}")
-        if receipt['outcome']=='saved':
-            lines += ['This is a planned default; stock is consumed only when eaten.','No meal intake was recorded.']
-        else:
-            lines += ['The previous default plan is unchanged.','No intake was recorded or stock consumed.']
-        return lines
-    if 'preparation_details' in data:
-        draft=data['preparation_details']
-        lines=['Preparation details captured (not saved):']
-        for item in draft['actual_usage']:
-            amount=exact_number(item['quantity']) if 'quantity' in item else 'quantity missing'
-            lines.append(f"  {item['ingredient_id']}: {amount} {item.get('unit','unit missing')}({item.get('state','state missing')})")
-        if draft.get('prepared_on'):lines.append('Prepared on: '+draft['prepared_on'])
-        for output in draft['outputs']:lines.append(f"  {output['name']}: {output.get('boxes','count missing')} boxes")
-        return lines
     if 'explanation' in data:
         answer=data['explanation'];lines=[answer['recipe_name']+' | Explanation with source evidence']
         for evidence in answer['evidence']:
@@ -171,35 +119,50 @@ def data_lines(data):
             for k,v in suggestion['targets']['metrics'].items():
                 result.append(f"  {k}: {number(v['actual'])}; Difference {number(v['difference'])}; "+('Pass' if v['passed'] else 'Fail'))
         return result
-    if 'items' in data:return ['Ingredient inventory: \n'+items(data['items'])]
+    if 'items' in data and 'addon_version' not in data:return ['Ingredient inventory: \n'+items(data['items'])]
     if 'recipes' in data:return [recipe(r) for r in data['recipes']]
     if 'recipe' in data:return [recipe(data['recipe'])]
     if 'batches' in data:
-        return [f"{b['name']} | Remaining {b['remaining_boxes']}/{b['total_boxes']} boxes\n  Batch: {b['id']}\n  Box contents: {nutrients(b['box_nutrients'])}\n  Default whole meal: {nutrients(b['meal_nutrients'])}\n  Cost per box: {cost(b['box_cost'])}\n  Default addons: \n{items(b['default_addons'])}" for b in data['batches']] or ['No prepared batches are available.']
+        return ['\n'.join([f"{b['name']} | Remaining {b['remaining_boxes']}/{b['total_boxes']} boxes\n  Batch: {b['id']}\n  Box contents: {nutrients(b['box_nutrients'])}\n  Data source status: {', '.join(sorted({str(s.get('status','unknown')) for s in b.get('sources') or []})) or 'unknown'}\n  Default whole meal: {nutrients(b['meal_nutrients'])}\n  Cost per box: {cost(b['box_cost'])}\n  Default addons: \n{items(b['default_addons'])}"]
+                          +(target_check(b['meal_target_check'],'  One box vs meal targets') if b.get('meal_target_check') else []))
+                for b in data['batches']] or ['No prepared batches are available.']
+    if 'batch_target_check' in data:
+        b=data['batch_target_check']
+        return [f"{b['batch_name']} ({b['batch_id']}), checked against the saved meal targets:"]+target_check(b['check'],'  One box')
+    if 'hypothetical_check' in data:
+        h=data['hypothetical_check']
+        return ['Hypothetical values checked against the saved meal targets (nothing is recorded):']+target_check(h,'  Result')
     if 'scope' in data:
-        empty=data['events']==0
+        if not data['events']:
+            return [f"{data['day']} | No prepared meals are recorded for this day.",
+                    'Because no matching meal record exists, the dish and its nutrition cannot be determined; no values are estimated.']
         lines=[f"{data['day']} | Recorded prepared meals {data['events']} meals",'Box contents: '+nutrients(data['box']),
-                'Actual addons: '+nutrients(data['addons']),('Recorded total: ' if empty else 'Total: ')+nutrients(data['total']),
+                'Actual addons: '+nutrients(data['addons']),'Total: '+nutrients(data['total']),
                 'Daily targets: '+nutrients(data['daily_targets']) if data.get('daily_targets') else 'Daily targets are not configured.',
                 'Includes only recorded prepared meals; excludes restaurant meals, drinks, and other snacks.']
-        if empty:lines+=['No prepared meals are recorded for this date.',
-                         'Actual intake is unknown; an empty log cannot establish the nutrition of an unrecorded meal.']
         labels={'kcal':'Calories','protein_g':'Protein','carbs_g':'Carbohydrates','fat_g':'Fat'}
         for key,value in (data.get('progress') or {}).items():
             percent=Decimal(str(value['ratio']))*100
             lines.append(f"  {labels.get(key,key)}: {number(value['actual'])} / {number(value['target'])}({number(percent)}%); Difference {number(value['difference'])}")
         return lines
+    if 'candidates' in data and not data['candidates']:
+        return ['No matching records were found, so nothing can be reported for this request; no values are estimated.']
     if 'candidates' in data:
         return ['Candidates: ']+[f"  {x['id']} | {x.get('name',x.get('data',{}).get('batch_name',''))} | {x.get('eaten_on',x.get('remaining_boxes',''))}" for x in data['candidates']]+(['Select one candidate first.'] if data.get('needs_clarification') else [])
-    if 'event_id' in data:
-        lines=['Meal record updated: '+data['event_id']]
-        for key,label in (('batch_name','Batch'),('eaten_on','Date'),('meal','Meal')):
-            if data.get(key) is not None:lines.append(label+': '+data[key])
+    if 'event_id' in data and 'batch_name' in data and 'eaten_on' in data:
+        lines=['Meal recorded: '+data['batch_name']+' ('+data['batch_id']+') | Date '+data['eaten_on']+' | Meal '+(data.get('meal') or 'not specified'),
+               'Event ID: '+data['event_id']]
+        if data.get('remaining_boxes') is not None:
+            lines.append('One box was deducted; remaining boxes in this batch: '+str(data['remaining_boxes']))
         if 'total_nutrients' in data:lines.append('This meal: '+nutrients(data['total_nutrients']))
         return lines
+    if 'event_id' in data:return ['Meal record updated: '+data['event_id']]+(['This meal: '+nutrients(data['total_nutrients'])] if 'total_nutrients' in data else [])
     if 'batch_ids' in data:return ['Preparation confirmed; ingredients were consumed once.','Batch: '+', '.join(data['batch_ids'])]
     if 'updated_inventory' in data:return ['Inventory updated.']
-    if 'addon_version' in data:return ['Default addon plan saved; no intake recorded or stock consumed.']
+    if 'addon_version' in data:
+        saved='Default addon plan saved'+(' for batch '+data['batch_id'] if data.get('batch_id') else '')+':'
+        return [saved+('\n'+items(data['items']) if 'items' in data else ''),
+                'This is a planned default only: no intake was recorded and no stock was consumed. Addons are consumed only when a meal is eaten.']
     if 'label_updated' in data:return ['Product label saved for future calculations; existing snapshots are preserved.']
     if 'meal_targets' in data:return ['Meal targets: '+nutrients(data['meal_targets']),'Daily targets: '+nutrients(data['daily_targets']),'Timezone: '+data['timezone']]
     if data.get('needs_setup'):return ['Profile is not configured. Provide timezone, equipment, and separate meal and daily targets.']

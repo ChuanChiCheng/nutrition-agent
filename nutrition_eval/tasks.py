@@ -17,6 +17,10 @@ CATEGORIES = {
     "unanswerable",
 }
 LABELS = {"edge", "unanswerable"}
+# Task types follow the lecture-slide format. "tool" tasks are graded on final
+# database state and required action order, plus the reply rubric; "rubric" and
+# "unanswerable" tasks are graded by the reply rubric and must change no state.
+TYPES = {"tool", "rubric", "unanswerable"}
 
 _CHANGE_SCHEMA = {
     "type": "object",
@@ -35,19 +39,21 @@ TASK_SCHEMA = {
     "type": "object",
     "required": [
         "id",
+        "type",
+        "question",
+        "rubric",
         "category",
         "labels",
         "fixture",
-        "request",
         "scripted_answers",
         "approval",
         "expected_changes",
         "required_order",
-        "reply_rubric",
     ],
     "additionalProperties": False,
     "properties": {
         "id": {"type": "string", "minLength": 1},
+        "type": {"enum": sorted(TYPES)},
         "category": {"enum": sorted(CATEGORIES)},
         "labels": {
             "type": "array",
@@ -55,7 +61,7 @@ TASK_SCHEMA = {
             "uniqueItems": True,
         },
         "fixture": {"type": "object"},
-        "request": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "minLength": 1},
         "scripted_answers": {"type": "array", "items": {"type": "string"}},
         "approval": {"enum": ["approve", "reject", None]},
         "expected_changes": {
@@ -63,7 +69,7 @@ TASK_SCHEMA = {
             "items": _CHANGE_SCHEMA,
         },
         "required_order": {"type": "array", "items": {"type": "object"}},
-        "reply_rubric": {
+        "rubric": {
             "type": "array",
             "minItems": 1,
             "items": {"type": "string", "minLength": 1},
@@ -82,6 +88,20 @@ def _location(path: Path, line_number: int, task_id: object = None) -> str:
     return f"{path}: line {line_number}{task_part}"
 
 
+def _check_type(record: dict) -> None:
+    task_type = record["type"]
+    unanswerable = "unanswerable" in record["labels"]
+    has_actions = bool(record["expected_changes"] or record["required_order"])
+    if (task_type == "unanswerable") != unanswerable:
+        raise ValueError("type 'unanswerable' must match the 'unanswerable' label")
+    if task_type == "tool" and not has_actions:
+        raise ValueError("type 'tool' requires expected_changes or required_order")
+    if task_type != "tool" and has_actions:
+        raise ValueError(
+            f"type {task_type!r} cannot have expected_changes or required_order; use 'tool'"
+        )
+
+
 def _to_task(record: dict) -> EvalTask:
     if "unanswerable" in record["labels"] and (
         record["scripted_answers"] or record["expected_changes"] or record["approval"]
@@ -89,6 +109,7 @@ def _to_task(record: dict) -> EvalTask:
         raise ValueError(
             "unanswerable tasks cannot have scripted answers, expected changes, or approvals"
         )
+    _check_type(record)
     changes = []
     for change in record["expected_changes"]:
         if not change["match"] or "id" in change["match"]:
@@ -107,12 +128,15 @@ def _to_task(record: dict) -> EvalTask:
         category=record["category"],
         labels=set(record["labels"]),
         fixture=record["fixture"],
-        request=record["request"],
+        # The slide-format "question" and "rubric" keep their internal names so the
+        # controller input and judge payload are unchanged.
+        request=record["question"],
         scripted_answers=record["scripted_answers"],
         approval=record["approval"],
         expected_changes=changes,
         required_order=record["required_order"],
-        reply_rubric=record["reply_rubric"],
+        reply_rubric=record["rubric"],
+        task_type=record["type"],
     )
 
 

@@ -1,0 +1,3 @@
+# Failure Analysis
+
+Task P01 failed for baseline repeat 1. The preserved trace records ask_user. The observed grader findings were: order: required order missing or misplaced: preview → approval; order: task approval was expected but no preview was displayed; order: task approval was expected but not sent; reply: criterion 1 failed (Explain total ingredient usage and each batch allocation; do not claim saving after rejection.): The reply gives no total ingredient usage or batch allocations; it only requests missing details.. This identifies the failing step and state or response consequence from recorded evidence; review the first failing action and its service result before changing the controller.

@@ -17,10 +17,10 @@
   "judge_store": false,
   "judge_version": "nutrition-reply-judge-v2",
   "dataset_version": "nutrition-eval-50-v2",
-  "formal_taskset_sha256": "18150dbd01141402c6532e503214c50a927e771548530e886951018bbc79f772",
+  "formal_taskset_sha256": "1632bf3a5bfe52e415bde7b783626f8f82a8fb493922166ae33ebf4f7d496fa2",
   "task_version": "nutrition-eval-50-v2",
   "fixture_version": "synthetic-catalog-v1",
-  "tool_version": "v1.0",
+  "tool_version": "v1.2",
   "openai_sdk_version": "2.54.0",
   "database_migration_version": "001_initial.sql",
   "database_migrations": [

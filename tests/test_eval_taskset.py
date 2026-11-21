@@ -35,6 +35,7 @@ def test_formal_taskset_matches_approved_category_counts_and_provenance():
     }
     assert sum("edge" in task.labels for task in tasks) >= 5
     assert sum("unanswerable" in task.labels for task in tasks) == 2
+    assert Counter(task.task_type for task in tasks) == {"tool": 33, "rubric": 15, "unanswerable": 2}
     assert all(task.fixture.get("synthetic") is True for task in tasks)
     assert all(task.fixture.get("provenance", {}).get("dataset_version") == "nutrition-eval-50-v2" for task in tasks)
     assert all(task.fixture.get("catalog", {}).get("version") == "synthetic-catalog-v1" for task in tasks)

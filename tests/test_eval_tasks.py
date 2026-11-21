@@ -6,15 +6,16 @@ import pytest
 def task_record(task_id="T01", *, category="nutrition", labels=None):
     return {
         "id": task_id,
+        "type": "unanswerable" if "unanswerable" in (labels or []) else "rubric",
+        "question": "Plan a meal.",
+        "rubric": ["Do not invent data."],
         "category": category,
         "labels": labels or [],
         "fixture": {"synthetic": True},
-        "request": "Plan a meal.",
         "scripted_answers": [],
         "approval": None,
         "expected_changes": [],
         "required_order": [],
-        "reply_rubric": ["Do not invent data."],
     }
 
 
@@ -27,7 +28,7 @@ def write_jsonl(path, rows):
     [
         '{"id":\n',
         "\n".join(json.dumps(task_record()) for _ in range(2)) + "\n",
-        json.dumps({key: value for key, value in task_record().items() if key != "request"}) + "\n",
+        json.dumps({key: value for key, value in task_record().items() if key != "question"}) + "\n",
     ],
     ids=["invalid-json", "duplicate-id", "missing-field"],
 )
@@ -81,6 +82,7 @@ def test_expected_change_requires_semantic_match_and_parses_into_contract(tmp_pa
 
     path = tmp_path / "tasks.jsonl"
     row = task_record()
+    row["type"] = "tool"
     row["expected_changes"] = [
         {
             "op": "insert",
@@ -166,3 +168,38 @@ def test_unanswerable_task_cannot_include_scripted_answer_or_expected_change(tmp
     with pytest.raises(ValueError, match=r"unanswerable.*scripted|scripted.*unanswerable"):
         load_tasks(path)
 
+
+
+def test_load_tasks_reads_lecture_slide_fields(tmp_path):
+    from nutrition_eval.tasks import load_tasks
+
+    path = tmp_path / "tasks.jsonl"
+    write_jsonl(path, [task_record()])
+
+    task = load_tasks(path)[0]
+    assert task.task_type == "rubric"
+    assert task.request == "Plan a meal."
+    assert task.reply_rubric == ["Do not invent data."]
+
+
+@pytest.mark.parametrize(
+    "changes, message",
+    [
+        ({"type": "exact"}, r"type"),
+        ({"type": "tool"}, r"'tool' requires"),
+        ({"type": "rubric", "required_order": [{"event": "write"}]}, r"use 'tool'"),
+        ({"type": "unanswerable"}, r"'unanswerable' label"),
+        ({"type": "rubric", "labels": ["unanswerable"], "category": "unanswerable"}, r"'unanswerable' label"),
+    ],
+    ids=["unsupported-type", "tool-without-actions", "rubric-with-actions", "type-without-label", "label-without-type"],
+)
+def test_task_type_must_match_grading_shape(tmp_path, changes, message):
+    from nutrition_eval.tasks import load_tasks
+
+    path = tmp_path / "tasks.jsonl"
+    row = task_record()
+    row.update(changes)
+    write_jsonl(path, [row])
+
+    with pytest.raises(ValueError, match=message):
+        load_tasks(path)

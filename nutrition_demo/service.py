@@ -411,14 +411,20 @@ class NutritionService:
     def find_events(self,query):
         allowed={'date','batch_id','meal','event_id'}
         if set(query)-allowed:raise ValueError('Unknown event search fields')
+        normalized_query=dict(query)
+        day=self._day(query['date']) if 'date' in query else None
+        if day:normalized_query['date']=day
+        if isinstance(query.get('meal'),str):normalized_query['meal']=query['meal'].strip().casefold()
         with self.store.transaction() as c:
             rows=c.execute('SELECT * FROM events ORDER BY eaten_on,id').fetchall()
-            day=self._day(query['date']) if 'date' in query else None
             rows=[r for r in rows if (not day or r['eaten_on'].isoformat()==day)
                   and ('batch_id' not in query or r['batch_id']==query['batch_id'])
-                  and ('meal' not in query or r['meal']==query['meal'])
+                  and ('meal' not in normalized_query or
+                       (r['meal'].strip().casefold() if isinstance(r['meal'],str) else r['meal'])==normalized_query['meal'])
                   and ('event_id' not in query or r['id']==query['event_id'])]
-            return {'candidates':encode(rows),'needs_clarification':len(rows)!=1}
+            return {'entity':'meal_event','match_status':('no_match' if not rows else 'unique' if len(rows)==1 else 'multiple'),
+                    'query':normalized_query,'record_scope':'recorded_prepared_meals_only',
+                    'candidates':encode(rows),'needs_clarification':len(rows)>1}
 
     def _event(self,c,event_id):
         row=c.execute('SELECT * FROM events WHERE id=%s',(event_id,)).fetchone()

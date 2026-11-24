@@ -2,17 +2,8 @@
 
 | Name | NetID |
 |---|---|
+| Isaac Huang | heng0504 |
 | Karry Cheng | karryc |
-| _TODO_ | _TODO_ |
-
-## Submitted files
-
-| Item | Location |
-|---|---|
-| 50 tasks | [`tasks.jsonl`](tasks.jsonl) |
-| Evaluation script | [`nutrition_eval/`](nutrition_eval/), entry point `python -m nutrition_eval` |
-| Results table with pass@3 and pass^3 | [Results](#results) below; the full run is in [`results/formal-50-english-2026-11-20-karry-v5/`](results/formal-50-english-2026-11-20-karry-v5/) |
-| One paragraph explaining a failure | [Traced failure](#traced-failure-p08-agent-repeat-2) below |
 
 ## Tasks
 
